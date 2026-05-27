@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "States/BaseState.h"
+#include "Items/BaseItem.h"
+#include "Village/House/House.h"
 #include "SurvivorFSM.generated.h"
 
 class ASurvivorPawn;
@@ -28,6 +30,21 @@ public:
 
 	UPROPERTY()
 	AActor* CurrentThreat;
+	
+	UPROPERTY()
+	TArray<ABaseItem*> KnownItems;
+	
+	UPROPERTY()
+	TArray<AHouse*> KnownHouses;
+	
+	UPROPERTY()
+	ABaseItem* TargetItem;
+
+	UPROPERTY()
+	TArray<AHouse*> VisitedHouses;
+
+	UPROPERTY()
+	AHouse* TargetHouse;
 
 protected:
 	virtual void BeginPlay() override;
