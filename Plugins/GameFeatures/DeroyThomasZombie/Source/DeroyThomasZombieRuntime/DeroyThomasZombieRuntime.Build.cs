@@ -39,6 +39,7 @@ public class DeroyThomasZombieRuntime : ModuleRules
 				"Slate",
 				"SlateCore",
 				"AIModule",
+				"GameAI_Zombie",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

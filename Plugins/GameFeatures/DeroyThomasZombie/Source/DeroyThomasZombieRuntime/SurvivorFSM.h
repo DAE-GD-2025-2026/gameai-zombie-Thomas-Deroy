@@ -1,0 +1,38 @@
+﻿#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "States/BaseState.h"
+#include "SurvivorFSM.generated.h"
+
+class ASurvivorPawn;
+
+UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+class DEROYTHOMASZOMBIERUNTIME_API USurvivorFSM : public UActorComponent
+{
+	GENERATED_BODY()
+
+public: 
+	USurvivorFSM();
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+	void OnZombieSpotted(AActor* Zombie);
+	void ChangeState(TSubclassOf<UBaseState> NewStateClass);
+	void MoveAlongPath(float DeltaTime);
+	
+	UPROPERTY()
+	ASurvivorPawn* SurvivorPawn;
+
+	TArray<FVector> CurrentPath;
+	int32 CurrentPathIndex{0};
+
+	UPROPERTY()
+	AActor* CurrentThreat;
+
+protected:
+	virtual void BeginPlay() override;
+
+private:
+	UPROPERTY()
+	UBaseState* CurrentState;
+};
