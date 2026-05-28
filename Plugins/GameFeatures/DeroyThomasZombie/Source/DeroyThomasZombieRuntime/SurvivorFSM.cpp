@@ -5,6 +5,10 @@
 #include "DrawDebugHelpers.h"
 #include "States/ExploreState.h"
 #include "States/FleeState.h"
+#include "States/CombatState.h"
+#include "States/HideState.h"
+#include "Common/InventoryComponent.h"
+#include "Common/HealthComponent.h"
 
 USurvivorFSM::USurvivorFSM()
 {
@@ -82,8 +86,60 @@ void USurvivorFSM::MoveAlongPath(float DeltaTime)
     }
 }
 
+bool USurvivorFSM::HasUsableWeapon(int& OutSlotIndex)
+{
+    if (UInventoryComponent* Inventory = SurvivorPawn->GetComponentByClass<UInventoryComponent>())
+    {
+        auto const& Items = Inventory->GetInventory();
+        for (int i = 0; i < Items.Num(); ++i)
+        {
+            if (Items[i] != nullptr)
+            {
+                EItemType Type = Items[i]->GetItemType();
+                // If weapon and has ammo
+                if ((Type == EItemType::Pistol || Type == EItemType::Shotgun) && Items[i]->GetValue() > 0)
+                {
+                    OutSlotIndex = i;
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
 {
     CurrentThreat = Zombie;
-    ChangeState(UFleeState::StaticClass()); 
+
+    int WeaponSlot = -1;
+    UHealthComponent* HealthComp = SurvivorPawn->GetComponentByClass<UHealthComponent>();
+    float HealthPct = HealthComp ? (float)HealthComp->GetHealth() / (float)HealthComp->GetMaxHealth() : 1.0f;
+
+    // Check if there is valid house in memory
+    bool bHasValidHouse = false;
+    for (AHouse* House : KnownHouses) {
+        if (IsValid(House)) { bHasValidHouse = true; break; }
+    }
+    if (!bHasValidHouse) {
+        for (AHouse* House : VisitedHouses) {
+            if (IsValid(House)) { bHasValidHouse = true; break; }
+        }
+    }
+    
+    // Use weapon
+    if (HasUsableWeapon(WeaponSlot) && HealthPct > 0.4f)
+    {
+        ChangeState(UCombatState::StaticClass());
+    }
+    // Hide in house
+    else if (bHasValidHouse)
+    {
+        ChangeState(UHideState::StaticClass());
+    }
+    // Run
+    else
+    {
+        ChangeState(UFleeState::StaticClass()); 
+    }
 }

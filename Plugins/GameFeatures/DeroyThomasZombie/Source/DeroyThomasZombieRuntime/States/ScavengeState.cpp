@@ -55,6 +55,41 @@ void UScavengeState::Update(float DeltaTime)
                     
                     EvaluateInventory();
                     
+                    // Check if there is space
+                    if (Inventory->GetInventory().Contains(nullptr))
+                    {
+                        ABaseItem* ClosestNextItem = nullptr;
+                        float ClosestDist = FLT_MAX;
+
+                        // Cleanup
+                        for (int j = ContextFSM->KnownItems.Num() - 1; j >= 0; --j)
+                        {
+                            if (!IsValid(ContextFSM->KnownItems[j]))
+                            {
+                                ContextFSM->KnownItems.RemoveAt(j);
+                            }
+                        }
+
+                        // Find closest remaining item we know about
+                        for (ABaseItem* KnownItem : ContextFSM->KnownItems)
+                        {
+                            float Dist = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), KnownItem->GetActorLocation());
+                            if (Dist < ClosestDist)
+                            {
+                                ClosestDist = Dist;
+                                ClosestNextItem = KnownItem;
+                            }
+                        }
+
+                        // If other items, go there
+                        if (ClosestNextItem)
+                        {
+                            ContextFSM->TargetItem = ClosestNextItem;
+                            ContextFSM->CurrentPath.Empty(); // New path
+                            return; 
+                        }
+                    }
+                    
                     ContextFSM->ChangeState(UExploreState::StaticClass());
 
                     return;

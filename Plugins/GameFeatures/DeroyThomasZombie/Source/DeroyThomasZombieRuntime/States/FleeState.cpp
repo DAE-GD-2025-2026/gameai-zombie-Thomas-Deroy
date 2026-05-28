@@ -45,6 +45,15 @@ void UFleeState::Update(float DeltaTime)
         FVector EscapeLocation = ContextFSM->SurvivorPawn->GetActorLocation() + (RunDirection * 1000.0f);
         ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(EscapeLocation);
         ContextFSM->CurrentPathIndex = 0;
+        
+        if (ContextFSM->CurrentPath.IsEmpty())
+        {
+            ContextFSM->SurvivorPawn->AddMovementInput(RunDirection, 1.0f);
+            
+            FRotator TargetRot = RunDirection.Rotation();
+            FRotator SmoothRot = FMath::RInterpTo(ContextFSM->SurvivorPawn->GetActorRotation(), TargetRot, DeltaTime, 10.0f);
+            ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
+        }
     }
     else
     {

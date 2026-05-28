@@ -33,19 +33,19 @@ public:
 	
 	UPROPERTY()
 	TArray<ABaseItem*> KnownItems;
-	
 	UPROPERTY()
 	TArray<AHouse*> KnownHouses;
 	
 	UPROPERTY()
 	ABaseItem* TargetItem;
-
-	UPROPERTY()
-	TArray<AHouse*> VisitedHouses;
-
 	UPROPERTY()
 	AHouse* TargetHouse;
-
+	
+	UPROPERTY()
+	TArray<AHouse*> VisitedHouses;
+	
+	bool HasUsableWeapon(int& OutSlotIndex);
+	
 protected:
 	virtual void BeginPlay() override;
 

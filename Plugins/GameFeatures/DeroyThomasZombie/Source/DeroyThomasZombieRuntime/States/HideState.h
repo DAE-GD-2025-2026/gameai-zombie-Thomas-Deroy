@@ -2,18 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "BaseState.h"
-#include "CombatState.generated.h"
+#include "HideState.generated.h"
 
 UCLASS()
-class DEROYTHOMASZOMBIERUNTIME_API UCombatState : public UBaseState
+class DEROYTHOMASZOMBIERUNTIME_API UHideState : public UBaseState
 {
 	GENERATED_BODY()
 
 public:
 	virtual void Enter(USurvivorFSM* FSM) override;
 	virtual void Update(float DeltaTime) override;
-
-private:
-	float TimeSinceLastShot{0.0f};
-	float FireRate{1.0f}; 
 };

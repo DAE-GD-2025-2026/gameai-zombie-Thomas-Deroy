@@ -13,4 +13,7 @@ public:
 	virtual void Enter(USurvivorFSM* FSM) override;
 	virtual void Update(float DeltaTime) override;
 	virtual void Exit() override;
+	
+private:
+	int SearchWaypoints{0};
 };
