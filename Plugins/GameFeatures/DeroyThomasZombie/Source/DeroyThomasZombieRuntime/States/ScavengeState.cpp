@@ -35,19 +35,23 @@ void UScavengeState::Update(float DeltaTime)
         return;
     }
     
-    // Check item in pickup range
+    // Check if item within range
     float DistToItem = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->TargetItem->GetActorLocation());
 
     if (DistToItem <= Inventory->GetPickupRange())
     {
-        // Find empty inventory slot
+        bool bGrabbedSuccessfully = false;
+
+        // Find an empty inventory slot
         for (int i = 0; i < Inventory->GetInventoryCapacity(); ++i)
         {
             if (Inventory->GetInventory()[i] == nullptr)
             {
                 if (Inventory->GrabItem(i, ContextFSM->TargetItem))
                 {
-                    // Item picked up
+                    bGrabbedSuccessfully = true;
+
+                    // Item successfully picked up
                     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Grabbed Item!"));
 
                     ContextFSM->KnownItems.Remove(ContextFSM->TargetItem);
@@ -55,13 +59,13 @@ void UScavengeState::Update(float DeltaTime)
                     
                     EvaluateInventory();
                     
-                    // Check if there is space
+                    // Continue if inventory has space
                     if (Inventory->GetInventory().Contains(nullptr))
                     {
                         ABaseItem* ClosestNextItem = nullptr;
                         float ClosestDist = FLT_MAX;
 
-                        // Cleanup
+                        // Remove invalid item references
                         for (int j = ContextFSM->KnownItems.Num() - 1; j >= 0; --j)
                         {
                             if (!IsValid(ContextFSM->KnownItems[j]))
@@ -70,10 +74,11 @@ void UScavengeState::Update(float DeltaTime)
                             }
                         }
 
-                        // Find closest remaining item we know about
+                        // Find closest known item
                         for (ABaseItem* KnownItem : ContextFSM->KnownItems)
                         {
                             float Dist = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), KnownItem->GetActorLocation());
+
                             if (Dist < ClosestDist)
                             {
                                 ClosestDist = Dist;
@@ -81,15 +86,17 @@ void UScavengeState::Update(float DeltaTime)
                             }
                         }
 
-                        // If other items, go there
+                        // Set next target
                         if (ClosestNextItem)
                         {
                             ContextFSM->TargetItem = ClosestNextItem;
-                            ContextFSM->CurrentPath.Empty(); // New path
+                            ContextFSM->CurrentPath.Empty(); 
+
                             return; 
                         }
                     }
                     
+                    // Return to explore
                     ContextFSM->ChangeState(UExploreState::StaticClass());
 
                     return;
@@ -97,11 +104,21 @@ void UScavengeState::Update(float DeltaTime)
             }
         }
         
-        ContextFSM->ChangeState(UExploreState::StaticClass());
+        // Handle full inventory
+        if (!bGrabbedSuccessfully)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Inventory is FULL! Leaving item."));
+            
+            // Forget item target
+            ContextFSM->KnownItems.Remove(ContextFSM->TargetItem);
+            ContextFSM->TargetItem = nullptr;
+            
+            // Return to explore
+            ContextFSM->ChangeState(UExploreState::StaticClass());
+        }
 
         return;
     }
-    
     // Generate path to item
     if (ContextFSM->CurrentPath.IsEmpty() || ContextFSM->CurrentPathIndex >= ContextFSM->CurrentPath.Num())
     {

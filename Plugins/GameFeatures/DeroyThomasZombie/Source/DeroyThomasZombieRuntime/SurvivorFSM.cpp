@@ -40,7 +40,34 @@ void USurvivorFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
     
     for (int i = CurrentPathIndex; i < CurrentPath.Num() - 1; ++i)
     {
-       DrawDebugLine(GetWorld(), CurrentPath[i], CurrentPath[i+1], FColor::Green, false, -1.0f, 0, 2.0f);
+        DrawDebugLine(GetWorld(), CurrentPath[i], CurrentPath[i+1], FColor::Green, false, -1.0f, 0, 2.0f);
+    }
+
+    // Debug cone
+    if (SurvivorPawn)
+    {
+        FVector PawnLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
+        FVector Forward = SurvivorPawn->GetActorForwardVector();
+    
+        float SightRadius = 1000.0f;
+        
+        float VisionAngleWidth = FMath::DegreesToRadians(70.0f); 
+        float VisionAngleHeight = FMath::DegreesToRadians(5.0f); 
+    
+        DrawDebugCone(
+            GetWorld(), 
+            PawnLoc, 
+            Forward, 
+            SightRadius, 
+            VisionAngleWidth, 
+            VisionAngleHeight, 
+            24,                
+            FColor::Yellow, 
+            false, 
+            -1.0f, 
+            0, 
+            1.5f               
+        );
     }
 }
 
@@ -65,27 +92,112 @@ void USurvivorFSM::ChangeState(TSubclassOf<UBaseState> NewStateClass)
 
 void USurvivorFSM::MoveAlongPath(float DeltaTime)
 {
+    if (!SurvivorPawn || CurrentPath.IsEmpty()) return;
+
+    FVector PawnLocation = SurvivorPawn->GetActorLocation();
+    
+    float WaypointTolerance = 75.0f; 
+
+    while (CurrentPathIndex < CurrentPath.Num() - 1 && FVector::Distance(PawnLocation, CurrentPath[CurrentPathIndex]) < WaypointTolerance)
+    {
+        CurrentPathIndex++;
+    }
+
+    // Stop if path finished
     if (CurrentPathIndex >= CurrentPath.Num()) return;
 
     FVector TargetPoint = CurrentPath[CurrentPathIndex];
-    FVector MoveDirection = (TargetPoint - SurvivorPawn->GetActorLocation()).GetSafeNormal();
-    MoveDirection.Z = 0.0f; 
 
-    SurvivorPawn->AddMovementInput(MoveDirection, 1.0f);
+    // Direction towards waypoint
+    FVector SeekForce = (TargetPoint - PawnLocation).GetSafeNormal();
+    SeekForce.Z = 0.0f;
+
+    // Force used to avoid nearby zombies
+    FVector SeparationForce = FVector::ZeroVector;
+    int AvoidCount = 0;
     
-    if (!MoveDirection.IsNearlyZero())
+    // Remove invalid zombie references
+    for (int i = KnownZombies.Num() - 1; i >= 0; --i)
     {
-       FRotator TargetRot = MoveDirection.Rotation();
-       FRotator NewRot = FMath::RInterpTo(SurvivorPawn->GetActorRotation(), TargetRot, DeltaTime, 10.0f);
-       SurvivorPawn->SetActorRotation(NewRot);
+        if (!IsValid(KnownZombies[i]))
+        {
+            KnownZombies.RemoveAt(i);
+        }
     }
-    
-    if (FVector::Distance(SurvivorPawn->GetActorLocation(), TargetPoint) < 100.0f)
+
+    // Calculate avoidance force
+    for (AActor* Zombie : KnownZombies)
+    {
+        float DistToZombie = FVector::Distance(PawnLocation, Zombie->GetActorLocation());
+        
+        // Avoid zombies within this radius
+        float AvoidanceRadius = 400.0f; 
+
+        if (DistToZombie < AvoidanceRadius)
+        {
+            FVector PushAway = (PawnLocation - Zombie->GetActorLocation()).GetSafeNormal();
+
+            // Push when closer to zombie
+            PushAway *= (AvoidanceRadius - DistToZombie) / AvoidanceRadius; 
+
+            SeparationForce += PushAway;
+            AvoidCount++;
+        }
+    }
+
+    // Average all avoidance forces
+    if (AvoidCount > 0)
+    {
+        SeparationForce /= AvoidCount;
+    }
+
+    SeparationForce.Z = 0.0f;
+
+    // Blend movement forces
+    float SeekWeight = 1.0f;
+    float SeparationWeight = 2.0f; 
+
+    FVector DesiredDirection = (SeekForce * SeekWeight) + (SeparationForce * SeparationWeight);
+
+    DesiredDirection.Z = 0.0f;
+    DesiredDirection.Normalize(); 
+
+    // Apply movement input
+    SurvivorPawn->AddMovementInput(DesiredDirection, 1.0f);
+
+    // Smoothly rotate towards movement direction
+    if (!DesiredDirection.IsNearlyZero(0.1f))
+    {
+       float DirectionDot = FVector::DotProduct(SurvivorPawn->GetActorForwardVector(), DesiredDirection);
+       
+       // Rotate faster during sharp turns
+       float DynamicRotSpeed = FMath::GetMappedRangeValueClamped(
+           FVector2D(1.0f, -1.0f),
+           FVector2D(8.0f, 25.0f),
+           DirectionDot
+       );
+       
+       FRotator TargetRot = DesiredDirection.Rotation();
+
+       FRotator SmoothRot = FMath::RInterpTo(
+           SurvivorPawn->GetActorRotation(),
+           TargetRot,
+           DeltaTime,
+           DynamicRotSpeed
+       );
+
+       SurvivorPawn->SetActorRotation(SmoothRot);
+    }
+
+    // Smaller tolerance for final waypoint
+    float ArrivalTolerance = (CurrentPathIndex == CurrentPath.Num() - 1) ? 50.0f : 100.0f;
+
+    // Advance to next waypoint
+    if (FVector::Distance(PawnLocation, TargetPoint) < ArrivalTolerance)
     {
        CurrentPathIndex++; 
     }
 }
-
 bool USurvivorFSM::HasUsableWeapon(int& OutSlotIndex)
 {
     if (UInventoryComponent* Inventory = SurvivorPawn->GetComponentByClass<UInventoryComponent>())
@@ -106,6 +218,23 @@ bool USurvivorFSM::HasUsableWeapon(int& OutSlotIndex)
         }
     }
     return false;
+}
+
+void USurvivorFSM::OnPurgeZoneSpotted(AActor* PurgeZone)
+{
+    ActivePurgeZone = PurgeZone;
+    GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Purge zone, run broski!"));
+    
+    // Overwrite to flee
+    ChangeState(UFleeState::StaticClass()); 
+}
+
+void USurvivorFSM::OnPurgeZoneLost(AActor* PurgeZone)
+{
+    if (ActivePurgeZone == PurgeZone)
+    {
+        ActivePurgeZone = nullptr;
+    }
 }
 
 void USurvivorFSM::OnZombieSpotted(AActor* Zombie)

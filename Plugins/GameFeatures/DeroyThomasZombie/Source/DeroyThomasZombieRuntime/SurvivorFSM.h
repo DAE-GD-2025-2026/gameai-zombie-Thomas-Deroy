@@ -27,7 +27,9 @@ public:
 
 	TArray<FVector> CurrentPath;
 	int32 CurrentPathIndex{0};
-
+	UPROPERTY()
+	FVector CurrentVelocity{FVector::ZeroVector};
+	
 	UPROPERTY()
 	AActor* CurrentThreat;
 	
@@ -44,7 +46,16 @@ public:
 	UPROPERTY()
 	TArray<AHouse*> VisitedHouses;
 	
+	UPROPERTY()
+	TArray<AActor*> KnownZombies;
+	
 	bool HasUsableWeapon(int& OutSlotIndex);
+	
+	UPROPERTY()
+	AActor* ActivePurgeZone;
+
+	void OnPurgeZoneSpotted(AActor* PurgeZone);
+	void OnPurgeZoneLost(AActor* PurgeZone);
 	
 protected:
 	virtual void BeginPlay() override;

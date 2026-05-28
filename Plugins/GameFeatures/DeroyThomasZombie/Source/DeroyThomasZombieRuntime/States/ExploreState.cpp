@@ -34,21 +34,17 @@ void UExploreState::Update(float DeltaTime)
             {
                 // Continue searching
                 SearchWaypoints--;
-
                 FHouseBounds Bounds = ContextFSM->TargetHouse->GetBounds();
                 
                 // Random point inside house bounds
                 FVector RandomOffset;
-
-                RandomOffset.X = FMath::RandRange(-Bounds.Extent.X * 0.7f, Bounds.Extent.X * 0.7f);
-                RandomOffset.Y = FMath::RandRange(-Bounds.Extent.Y * 0.7f, Bounds.Extent.Y * 0.7f);
+                RandomOffset.X = FMath::RandRange(-Bounds.Extent.X * 0.4f, Bounds.Extent.X * 0.4f);
+                RandomOffset.Y = FMath::RandRange(-Bounds.Extent.Y * 0.4f, Bounds.Extent.Y * 0.4f);
                 RandomOffset.Z = 0.0f;
 
                 FVector SearchPoint = Bounds.Origin + RandomOffset;
-
                 ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(SearchPoint);
                 ContextFSM->CurrentPathIndex = 0;
-
                 return;
             }
             else
@@ -66,6 +62,15 @@ void UExploreState::Update(float DeltaTime)
     // Generate new path if needed
     if (ContextFSM->CurrentPath.IsEmpty() || ContextFSM->CurrentPathIndex >= ContextFSM->CurrentPath.Num())
     {
+        // Resume path to target house, if movement interrupted
+        if (ContextFSM->TargetHouse)
+        {
+            ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(ContextFSM->TargetHouse->GetBounds().Origin);
+            ContextFSM->CurrentPathIndex = 0;
+
+            return;
+        }
+        
         // Move to known house first
         if (ContextFSM->KnownHouses.Num() > 0 && !ContextFSM->TargetHouse)
         {

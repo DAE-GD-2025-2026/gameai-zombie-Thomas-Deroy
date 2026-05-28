@@ -9,7 +9,7 @@
 #include "Common/InventoryComponent.h"
 #include "States/ScavengeState.h"
 #include "Village/House/House.h"
-
+#include "PurgeZones/PurgeZone.h"
 
 UStudentPerceptor::UStudentPerceptor()
 {
@@ -48,7 +48,32 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 		// Detect zombie threats
 		if (ABaseZombie* Zombie = Cast<ABaseZombie>(Actor))
 		{
-			FSM->OnZombieSpotted(Zombie);
+			if (Stimulus.WasSuccessfullySensed())
+			{
+				// Remember zombie
+				FSM->KnownZombies.AddUnique(Zombie);
+				// Act
+				FSM->OnZombieSpotted(Zombie);
+			}
+			else
+			{
+				// Forget zombie
+				FSM->KnownZombies.Remove(Zombie);
+			}
+			return;
+		}
+		
+		// Detect purgezone
+		if (APurgeZone* PurgeZone = Cast<APurgeZone>(Actor))
+		{
+			if (Stimulus.WasSuccessfullySensed())
+			{
+				FSM->OnPurgeZoneSpotted(PurgeZone);
+			}
+			else
+			{
+				FSM->OnPurgeZoneLost(PurgeZone);
+			}
 			return;
 		}
 		
@@ -61,11 +86,10 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 			if (!FSM->KnownItems.Contains(Item))
 			{
 				FSM->KnownItems.Add(Item);
-				
-				UInventoryComponent* Inventory = FSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
 
 				// Scavenging if inventory has space and no threat
-				if (Inventory && Inventory->GetInventory().Contains(nullptr) && !FSM->CurrentThreat)
+				UInventoryComponent* Inventory = FSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
+				if (Inventory && Inventory->GetInventory().Contains(nullptr) && !FSM->CurrentThreat && !FSM->TargetItem)
 				{
 					FSM->TargetItem = Item;
 					FSM->ChangeState(UScavengeState::StaticClass());
