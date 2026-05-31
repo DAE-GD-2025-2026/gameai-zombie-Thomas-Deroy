@@ -49,6 +49,7 @@ public:
 	UPROPERTY()
 	TArray<AActor*> KnownZombies;
 	
+	bool GetBestWeapon(float TargetDistance, int& OutSlotIndex);
 	bool HasUsableWeapon(int& OutSlotIndex);
 	
 	UPROPERTY()
@@ -56,6 +57,17 @@ public:
 
 	void OnPurgeZoneSpotted(AActor* PurgeZone);
 	void OnPurgeZoneLost(AActor* PurgeZone);
+	
+	UPROPERTY()
+	bool bHasDoneStartSpin{false};
+	float SpinTimer{0.0f};
+	
+	void EvaluateInventory();
+	
+	void OnDamageSensed(FVector DamageLocation);
+	int LastKnownHealth{-1};	
+	bool bIsReflexSpinning{false};
+	FVector ReflexTargetLocation;
 	
 protected:
 	virtual void BeginPlay() override;

@@ -16,4 +16,10 @@ public:
 	
 private:
 	int SearchWaypoints{0};
+	
+	float ParanoiaTimer{0.0f};
+	float TimeUntilNextCheck{10.0f};
+	bool bIsParanoiaChecking{false};
+	float ParanoiaCheckDuration{0.0f};
+	float ParanoiaAngle{180.0f};
 };

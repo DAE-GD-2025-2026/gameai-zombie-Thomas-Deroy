@@ -13,4 +13,8 @@ public:
 	virtual void Enter(USurvivorFSM* FSM) override;
 	virtual void Update(float DeltaTime) override;
 	virtual void Exit() override;
+	
+private:
+	bool bIsCheckingBehind{false};
+	float CheckTimer{0.0f};
 };

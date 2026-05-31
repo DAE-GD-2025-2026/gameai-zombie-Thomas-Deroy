@@ -45,6 +45,16 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 
 	if (USurvivorFSM* FSM = GetFSM())
 	{
+		// Feel Damage
+		if (Stimulus.Type == UAISense::GetSenseID<UAISense_Damage>())
+		{
+			if (Stimulus.WasSuccessfullySensed())
+			{
+				FSM->OnDamageSensed(Stimulus.StimulusLocation);
+			}
+			return;
+		}
+		
 		// Detect zombie threats
 		if (ABaseZombie* Zombie = Cast<ABaseZombie>(Actor))
 		{
@@ -52,6 +62,13 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 			{
 				// Remember zombie
 				FSM->KnownZombies.AddUnique(Zombie);
+				
+				// If runner, focus that thing
+				if (Zombie->GetClass()->GetName().Contains("Runner")) 
+				{
+					FSM->CurrentThreat = Zombie; 
+				}
+				
 				// Act
 				FSM->OnZombieSpotted(Zombie);
 			}

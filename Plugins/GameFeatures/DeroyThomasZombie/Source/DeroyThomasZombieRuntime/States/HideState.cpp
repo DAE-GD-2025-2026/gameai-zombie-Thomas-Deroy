@@ -13,6 +13,8 @@ void UHideState::Enter(USurvivorFSM* FSM)
     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan, TEXT("State Changed To: Hide"));
 
     if (!ContextFSM) return;
+    
+    ContextFSM->SurvivorPawn->StopRunning();
 
     // Find closest house known
     AHouse* ClosestHouse = nullptr;

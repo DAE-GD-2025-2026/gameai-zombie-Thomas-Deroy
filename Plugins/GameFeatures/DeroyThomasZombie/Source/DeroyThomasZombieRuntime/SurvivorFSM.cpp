@@ -33,6 +33,54 @@ void USurvivorFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
 
     if (!SurvivorPawn) return;
     
+    UHealthComponent* HealthComp = SurvivorPawn->GetComponentByClass<UHealthComponent>();
+    if (HealthComp)
+    {
+        int CurrentHealth = HealthComp->GetHealth();
+
+        // Get Health
+        if (LastKnownHealth == -1) 
+        {
+            LastKnownHealth = CurrentHealth;
+        }
+
+        // Track health
+        if (CurrentHealth < LastKnownHealth)
+        {
+            // Panic
+            if (!CurrentThreat && !ActivePurgeZone)
+            {
+                bIsReflexSpinning = true;
+                
+                ReflexTargetLocation = SurvivorPawn->GetActorLocation() - (SurvivorPawn->GetActorForwardVector() * 500.0f);
+                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Something bit me! Whipping around!"));
+            }
+        }
+        
+        // Remember new health
+        LastKnownHealth = CurrentHealth;
+    }
+    
+    EvaluateInventory();
+    
+    if (bIsReflexSpinning && SurvivorPawn)
+    {
+        FVector DirToDamage = (ReflexTargetLocation - SurvivorPawn->GetActorLocation()).GetSafeNormal();
+        DirToDamage.Z = 0.0f;
+        
+        // Spin
+        FRotator TargetRot = DirToDamage.Rotation();
+        FRotator SmoothRot = FMath::RInterpTo(SurvivorPawn->GetActorRotation(), TargetRot, DeltaTime, 40.0f);
+        SurvivorPawn->SetActorRotation(SmoothRot);
+        
+        if (FVector::DotProduct(SurvivorPawn->GetActorForwardVector(), DirToDamage) > 0.95f)
+        {
+            bIsReflexSpinning = false;
+        }
+        
+        return;
+    }
+    
     if (CurrentState)
     {
         CurrentState->Update(DeltaTime);
@@ -171,11 +219,7 @@ void USurvivorFSM::MoveAlongPath(float DeltaTime)
        float DirectionDot = FVector::DotProduct(SurvivorPawn->GetActorForwardVector(), DesiredDirection);
        
        // Rotate faster during sharp turns
-       float DynamicRotSpeed = FMath::GetMappedRangeValueClamped(
-           FVector2D(1.0f, -1.0f),
-           FVector2D(8.0f, 25.0f),
-           DirectionDot
-       );
+        float DynamicRotSpeed = FMath::GetMappedRangeValueClamped(FVector2D(1.0f, -1.0f), FVector2D(15.0f, 45.0f), DirectionDot);
        
        FRotator TargetRot = DesiredDirection.Rotation();
 
@@ -198,6 +242,7 @@ void USurvivorFSM::MoveAlongPath(float DeltaTime)
        CurrentPathIndex++; 
     }
 }
+
 bool USurvivorFSM::HasUsableWeapon(int& OutSlotIndex)
 {
     if (UInventoryComponent* Inventory = SurvivorPawn->GetComponentByClass<UInventoryComponent>())
@@ -237,8 +282,48 @@ void USurvivorFSM::OnPurgeZoneLost(AActor* PurgeZone)
     }
 }
 
+bool USurvivorFSM::GetBestWeapon(float TargetDistance, int& OutSlotIndex)
+{
+    UInventoryComponent* Inventory = SurvivorPawn->GetComponentByClass<UInventoryComponent>();
+    if (!Inventory) return false;
+
+    int BestShotgun = -1;
+    int BestPistol = -1;
+
+    auto const& Items = Inventory->GetInventory();
+    for (int i = 0; i < Items.Num(); ++i)
+    {
+        if (Items[i] != nullptr && Items[i]->GetValue() > 0)
+        {
+            if (Items[i]->GetItemType() == EItemType::Shotgun) BestShotgun = i;
+            if (Items[i]->GetItemType() == EItemType::Pistol) BestPistol = i;
+        }
+    }
+
+    // Shotgun close range, Pistol long range
+    if (TargetDistance < 400.0f)
+    {
+        if (BestShotgun != -1) { OutSlotIndex = BestShotgun; return true; }
+        if (BestPistol != -1) { OutSlotIndex = BestPistol; return true; }
+    }
+    else
+    {
+        if (BestPistol != -1) { OutSlotIndex = BestPistol; return true; }
+        if (BestShotgun != -1) { OutSlotIndex = BestShotgun; return true; }
+    }
+
+    return false;
+}
+
 void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
 {
+    // Zombie is far
+    float DistToZombie = FVector::Distance(SurvivorPawn->GetActorLocation(), Zombie->GetActorLocation());
+    if (DistToZombie > 700.0f)
+    {
+        return; 
+    }
+    
     CurrentThreat = Zombie;
 
     int WeaponSlot = -1;
@@ -256,8 +341,18 @@ void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
         }
     }
     
+    // Keep distance from heavy
+    bool bIsHeavy = Zombie->GetClass()->GetName().Contains("Heavy");
+    
+    if (bIsHeavy && DistToZombie > 300.0f)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Just a Heavy. Saving ammo and walking away!"));
+        ChangeState(UFleeState::StaticClass());
+        return;
+    }
+    
     // Use weapon
-    if (HasUsableWeapon(WeaponSlot) && HealthPct > 0.4f)
+    if (GetBestWeapon(DistToZombie, WeaponSlot) && HealthPct > 0.4)
     {
         ChangeState(UCombatState::StaticClass());
     }
@@ -271,4 +366,61 @@ void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
     {
         ChangeState(UFleeState::StaticClass()); 
     }
+}
+
+void USurvivorFSM::EvaluateInventory()
+{
+    if (!SurvivorPawn) return;
+    
+    UInventoryComponent* Inventory = SurvivorPawn->GetComponentByClass<UInventoryComponent>();
+    UHealthComponent* HealthComp = SurvivorPawn->GetComponentByClass<UHealthComponent>();
+    UStaminaComponent* StaminaComp = SurvivorPawn->GetComponentByClass<UStaminaComponent>();
+
+    if (!Inventory || !HealthComp || !StaminaComp) return;
+
+    // Check  vitals
+    float HealthPercentage = (float)HealthComp->GetHealth() / (float)HealthComp->GetMaxHealth();
+    float StaminaPercentage = StaminaComp->GetCurrentStamina() / StaminaComp->GetMaxStamina();
+
+    auto const& Items = Inventory->GetInventory();
+
+    // Check items
+    for (int i = 0; i < Items.Num(); ++i)
+    {
+        if (ABaseItem* Item = Items[i])
+        {
+            // Use medkit if health low
+            if (Item->GetItemType() == EItemType::Medkit && HealthPercentage < 0.4f)
+            {
+                Inventory->UseItem(i);
+                if (Item->GetValue() <= 0)
+                {
+                    Inventory->RemoveItem(i); 
+                }
+                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Used Medkit!"));
+                break; 
+            }
+            // Eat food if stamina low
+            else if (Item->GetItemType() == EItemType::Food && StaminaPercentage < 0.3f)
+            {
+                Inventory->UseItem(i);
+                if (Item->GetValue() <= 0)
+                {
+                    Inventory->RemoveItem(i);
+                }
+                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Ate Food!"));
+                break;
+            }
+        }
+    }
+}
+
+void USurvivorFSM::OnDamageSensed(FVector DamageLocation)
+{
+    if (CurrentThreat || ActivePurgeZone) return;
+
+    // We got hit
+    bIsReflexSpinning = true;
+    ReflexTargetLocation = SurvivorPawn->GetActorLocation() - (SurvivorPawn->GetActorForwardVector() * 500.0f);
+    GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Who hit me?!"));
 }

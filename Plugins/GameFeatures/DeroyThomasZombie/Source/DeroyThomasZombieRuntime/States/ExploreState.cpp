@@ -7,6 +7,15 @@ void UExploreState::Enter(USurvivorFSM* FSM)
 {
 	Super::Enter(FSM);
     
+    ParanoiaTimer = 0.0f;
+    TimeUntilNextCheck = FMath::RandRange(8.0f, 15.0f);
+    bIsParanoiaChecking = false;
+    
+    if (ContextFSM && ContextFSM->SurvivorPawn)
+    {
+        ContextFSM->SurvivorPawn->StopRunning();
+    }
+    
 	GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan, TEXT("State Changed To: Explore"));
 }
 
@@ -15,6 +24,24 @@ void UExploreState::Update(float DeltaTime)
     Super::Update(DeltaTime);
     
     if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
+    
+    // Spinning
+    if (!ContextFSM->bHasDoneStartSpin)
+    {
+        ContextFSM->SpinTimer += DeltaTime;
+        
+        FRotator CurrentRot = ContextFSM->SurvivorPawn->GetActorRotation();
+        CurrentRot.Yaw += 180.0f * DeltaTime; 
+        ContextFSM->SurvivorPawn->SetActorRotation(CurrentRot);
+        
+        if (ContextFSM->SpinTimer >= 2.0f) 
+        {
+            ContextFSM->bHasDoneStartSpin = true;
+            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Check spawn env"));
+        }
+        
+        return; 
+    }
     
     // Check if target house was reached
     if (ContextFSM->TargetHouse)
@@ -100,6 +127,63 @@ void UExploreState::Update(float DeltaTime)
     {
         // Follow current path
         ContextFSM->MoveAlongPath(DeltaTime);
+    }
+    
+    if (bIsParanoiaChecking)
+    {
+        ParanoiaCheckDuration += DeltaTime;
+        
+        // Use movement direction
+        FVector MoveDir = ContextFSM->SurvivorPawn->GetVelocity().GetSafeNormal();
+
+        if (MoveDir.IsNearlyZero())
+        {
+            MoveDir = ContextFSM->SurvivorPawn->GetActorForwardVector();
+        }
+
+        // Look behind with random angle
+        FRotator LookBackRot = MoveDir.Rotation();
+        LookBackRot.Yaw += ParanoiaAngle; 
+
+        FRotator SmoothRot = FMath::RInterpTo(
+            ContextFSM->SurvivorPawn->GetActorRotation(),
+            LookBackRot,
+            DeltaTime,
+            15.0f
+        );
+
+        ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
+
+        // 1 second looking
+        if (ParanoiaCheckDuration > 1.0f) 
+        {
+            bIsParanoiaChecking = false;
+            ParanoiaTimer = 0.0f;
+
+            // Randomize next check interval
+            TimeUntilNextCheck = FMath::RandRange(8.0f, 15.0f); 
+            
+            // Restore forward facing rotation
+            ContextFSM->SurvivorPawn->SetActorRotation(MoveDir.Rotation()); 
+            
+            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Nothing behind me..."));
+        }
+    }
+    else
+    {
+        // Count down
+        ParanoiaTimer += DeltaTime;
+
+        if (ParanoiaTimer >= TimeUntilNextCheck)
+        {
+            bIsParanoiaChecking = true;
+            ParanoiaCheckDuration = 0.0f;
+            
+            // Randomize look back angle
+            ParanoiaAngle = FMath::RandRange(160.0f, 200.0f); 
+            
+            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Yellow, TEXT("Just checking behind me..."));
+        }
     }
 }
 

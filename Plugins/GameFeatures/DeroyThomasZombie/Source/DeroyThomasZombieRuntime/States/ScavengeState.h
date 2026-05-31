@@ -19,8 +19,6 @@ public:
 	virtual void Exit() override;
 
 private:
-	void EvaluateInventory();
-    
 	UPROPERTY()
 	UInventoryComponent* Inventory;
 	UPROPERTY()

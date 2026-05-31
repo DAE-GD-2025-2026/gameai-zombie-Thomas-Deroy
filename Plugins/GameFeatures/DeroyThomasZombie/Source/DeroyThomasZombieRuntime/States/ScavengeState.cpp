@@ -57,8 +57,6 @@ void UScavengeState::Update(float DeltaTime)
                     ContextFSM->KnownItems.Remove(ContextFSM->TargetItem);
                     ContextFSM->TargetItem = nullptr;
                     
-                    EvaluateInventory();
-                    
                     // Continue if inventory has space
                     if (Inventory->GetInventory().Contains(nullptr))
                     {
@@ -131,46 +129,6 @@ void UScavengeState::Update(float DeltaTime)
         ContextFSM->MoveAlongPath(DeltaTime);
     }
 }
-
-void UScavengeState::EvaluateInventory()
-{
-    if (!Inventory || !HealthComp || !StaminaComp) return;
-    
-    // Calculate percentages
-    float HealthPercentage = (float)HealthComp->GetHealth() / (float)HealthComp->GetMaxHealth();
-    
-    float StaminaPercentage = StaminaComp->GetCurrentStamina() / StaminaComp->GetMaxStamina();
-
-    auto const& Items = Inventory->GetInventory();
-
-    for (int i = 0; i < Items.Num(); ++i)
-    {
-        if (ABaseItem* Item = Items[i])
-        {
-            // Use medkit if health low
-            if (Item->GetItemType() == EItemType::Medkit && HealthPercentage < 0.3f)
-            {
-                Inventory->UseItem(i);
-                Inventory->RemoveItem(i); 
-
-                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Used Medkit!"));
-
-                break; 
-            }
-            // Eat food if stamina low
-            else if (Item->GetItemType() == EItemType::Food && StaminaPercentage < 0.3f)
-            {
-                Inventory->UseItem(i);
-                Inventory->RemoveItem(i);
-
-                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Ate Food!"));
-
-                break;
-            }
-        }
-    }
-}
-
 
 void UScavengeState::Exit()
 {

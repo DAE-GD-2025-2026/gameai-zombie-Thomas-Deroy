@@ -1,5 +1,8 @@
 ﻿#include "FleeState.h"
+
+#include "CombatState.h"
 #include "ExploreState.h"
+#include "HideState.h"
 #include "../SurvivorFSM.h"
 #include "Survivor/SurvivorPawn.h"
 
@@ -8,6 +11,9 @@ void UFleeState::Enter(USurvivorFSM* FSM)
     Super::Enter(FSM);
     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("State Changed To: Flee"));
 
+    bIsCheckingBehind = false;
+    CheckTimer = 0.0f;
+    
     if (ContextFSM && ContextFSM->SurvivorPawn)
     {
         ContextFSM->SurvivorPawn->StartRunning(); 
@@ -18,23 +24,122 @@ void UFleeState::Enter(USurvivorFSM* FSM)
 void UFleeState::Update(float DeltaTime)
 {
     Super::Update(DeltaTime);
-    
+
+    // Validate FSM and pawn
     if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
 
-    // Determine current threat
-    AActor* ThreatToEvade = nullptr;
+    // Track the current threat
+    static FVector LastKnownThreatLoc = FVector::ZeroVector;
 
-    // Purge zone has priority over zombies
-    if (IsValid(ContextFSM->ActivePurgeZone))
+    AActor* ThreatToEvade = ContextFSM->ActivePurgeZone
+        ? ContextFSM->ActivePurgeZone
+        : ContextFSM->CurrentThreat;
+
+    if (ThreatToEvade)
     {
-        ThreatToEvade = ContextFSM->ActivePurgeZone;
-    }
-    else if (IsValid(ContextFSM->CurrentThreat))
-    {
-        ThreatToEvade = ContextFSM->CurrentThreat;
+        LastKnownThreatLoc = ThreatToEvade->GetActorLocation();
     }
 
-    // Return to explore
+    FVector PawnLoc = ContextFSM->SurvivorPawn->GetActorLocation();
+
+    // Shoulder check phase after escaping
+    if (bIsCheckingBehind)
+    {
+        CheckTimer += DeltaTime;
+
+        // Keep moving away from last known threat location
+        FVector RunDir = (PawnLoc - LastKnownThreatLoc).GetSafeNormal();
+        RunDir.Z = 0.0f;
+
+        ContextFSM->SurvivorPawn->AddMovementInput(RunDir, 1.0f);
+
+        // Turn around to look behind
+        FRotator LookBackRot = (-RunDir).Rotation();
+
+        FRotator SmoothRot = FMath::RInterpTo(
+            ContextFSM->SurvivorPawn->GetActorRotation(),
+            LookBackRot,
+            DeltaTime,
+            20.0f
+        );
+
+        ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
+
+        // Threat spotted again
+        if (ThreatToEvade && ThreatToEvade != ContextFSM->ActivePurgeZone)
+        {
+            bIsCheckingBehind = false;
+            CheckTimer = 0.0f;
+            
+            float DistToThreat = FVector::Distance(PawnLoc, ThreatToEvade->GetActorLocation());
+            int HordeSize = ContextFSM->KnownZombies.Num();
+
+            // Handle large zombie groups
+            if (HordeSize >= 3)
+            {
+                int WSlot;
+                
+                // We use a gun
+                if (ContextFSM->GetBestWeapon(DistToThreat, WSlot)) 
+                {
+                    GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Horde! Opening fire to thin them out!"));
+                    ContextFSM->ChangeState(UCombatState::StaticClass());
+                    return;
+                }
+                
+                // Search for known house to hide
+                bool bHasValidHouse = false;
+                for (AHouse* H : ContextFSM->KnownHouses) if (IsValid(H)) { bHasValidHouse = true; break; }
+                if (!bHasValidHouse) for (AHouse* H : ContextFSM->VisitedHouses) if (IsValid(H)) { bHasValidHouse = true; break; }
+
+                if (bHasValidHouse) 
+                {
+                    GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Out of ammo! Diving into a house!"));
+                    ContextFSM->ChangeState(UHideState::StaticClass());
+                    return;
+                } 
+                
+                // No ammo or known house
+                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("No ammo and no safety! Run!"));
+                return;
+            }
+            else
+            {
+                // Fight isolated zombies from a safe distance
+                int WSlot;
+
+                if (DistToThreat > 600.0f && ContextFSM->GetBestWeapon(DistToThreat, WSlot))
+                {
+                    GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, TEXT("Got the drop on them! Opening fire!"));
+
+                    ContextFSM->ChangeState(UCombatState::StaticClass());
+
+                    return;
+                }
+            }
+
+            // Continue fleeing
+            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Too close/No ammo! Keep running!"));
+
+            return;
+        }
+
+        // Threat successfully lost
+        if (CheckTimer > 1.5f)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Lost them. Back to exploring."));
+
+            FVector OriginalDir = (PawnLoc - LastKnownThreatLoc).GetSafeNormal();
+            OriginalDir.Z = 0.0f;
+            ContextFSM->SurvivorPawn->SetActorRotation(OriginalDir.Rotation());
+
+            ContextFSM->ChangeState(UExploreState::StaticClass());
+        }
+
+        return;
+    }
+
+    // Return to exploring if no threat exists
     if (!ThreatToEvade)
     {
         ContextFSM->ChangeState(UExploreState::StaticClass());
@@ -42,14 +147,14 @@ void UFleeState::Update(float DeltaTime)
         return;
     }
 
-    // Check distance from threat
-    float DistToThreat = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ThreatToEvade->GetActorLocation());
-    
-    // Larger safe distance for purge zones
-    float SafeDistance = (ThreatToEvade == ContextFSM->ActivePurgeZone) ? 1400.0f : 1500.0f;
+    float DistToThreat = FVector::Distance(PawnLoc, ThreatToEvade->GetActorLocation());
 
-    // Stop fleeing when safe
-    if (DistToThreat > SafeDistance) 
+    float SafeDistance = (ThreatToEvade == ContextFSM->ActivePurgeZone)
+        ? 1400.0f
+        : 1500.0f;
+
+    // Start shoulder check when considered safe
+    if (DistToThreat > SafeDistance)
     {
         if (ThreatToEvade == ContextFSM->ActivePurgeZone)
         {
@@ -60,44 +165,109 @@ void UFleeState::Update(float DeltaTime)
             ContextFSM->CurrentThreat = nullptr;
         }
         
-        ContextFSM->ChangeState(UExploreState::StaticClass());
+        bIsCheckingBehind = true;
+        CheckTimer = 0.0f;
+
+        // Stop path following during shoulder check
+        ContextFSM->CurrentPath.Empty();
 
         return;
     }
 
-    // Generate escape path
+    // Manage stamina while fleeing
+    UStaminaComponent* StaminaComp = ContextFSM->SurvivorPawn->GetComponentByClass<UStaminaComponent>();
+
+    float StaminaPct = StaminaComp
+        ? (StaminaComp->GetCurrentStamina() / StaminaComp->GetMaxStamina())
+        : 1.0f;
+
+    bool bIsPurge = (ThreatToEvade == ContextFSM->ActivePurgeZone);
+    bool bIsRunner = ThreatToEvade->GetClass()->GetName().Contains("Runner");
+    bool bIsDangerClose = DistToThreat < 500.0f;
+
+    if ((bIsPurge || bIsRunner || bIsDangerClose) && StaminaPct > 0.05f)
+    {
+        ContextFSM->SurvivorPawn->StartRunning();
+    }
+    else
+    {
+        ContextFSM->SurvivorPawn->StopRunning();
+    }
+
+    // Generate escape route if needed
     if (ContextFSM->CurrentPath.IsEmpty() || ContextFSM->CurrentPathIndex >= ContextFSM->CurrentPath.Num())
     {
-        // Move away from threat
-        FVector RunDirection = (ContextFSM->SurvivorPawn->GetActorLocation() - ThreatToEvade->GetActorLocation()).GetSafeNormal();
+        FVector DangerCenter = FVector::ZeroVector;
+        int ThreatCount = 0;
 
-        RunDirection.Z = 0.0f;
-        
-        // Add randomization to movement
-        RunDirection = RunDirection.RotateAngleAxis(FMath::RandRange(-30.0f, 30.0f), FVector::UpVector);
+        if (bIsPurge)
+        {
+            DangerCenter = ThreatToEvade->GetActorLocation();
+            ThreatCount = 1;
+        }
+        else
+        {
+            // Calculate center of nearby zombie group
+            for (AActor* Zombie : ContextFSM->KnownZombies)
+            {
+                if (IsValid(Zombie))
+                {
+                    DangerCenter += Zombie->GetActorLocation();
+                    ThreatCount++;
+                }
+            }
+        }
 
-        FVector EscapeLocation = ContextFSM->SurvivorPawn->GetActorLocation() + (RunDirection * 1500.0f);
+        if (ThreatCount > 0)
+        {
+            DangerCenter /= ThreatCount;
+        }
+        else
+        {
+            DangerCenter = ThreatToEvade->GetActorLocation();
+        }
+
+        FVector RunDir = (PawnLoc - DangerCenter).GetSafeNormal();
+        RunDir.Z = 0.0f;
+
+        FVector EscapeLocation = PawnLoc + (RunDir * 1200.0f);
 
         ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(EscapeLocation);
         ContextFSM->CurrentPathIndex = 0;
 
-        // Movement if pathfinding fails
+        // Handle failed pathfinding
         if (ContextFSM->CurrentPath.IsEmpty())
         {
-            ContextFSM->SurvivorPawn->AddMovementInput(RunDirection, 1.0f);
+            int WSlot = -1;
 
-            FRotator TargetRot = RunDirection.Rotation();
+            if (!bIsPurge && ContextFSM->GetBestWeapon(DistToThreat, WSlot))
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Cornered! Fighting for my life!"));
 
-            FRotator SmoothRot = FMath::RInterpTo(ContextFSM->SurvivorPawn->GetActorRotation(), TargetRot, DeltaTime, 10.0f);
+                ContextFSM->ChangeState(UCombatState::StaticClass());
 
-            ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
+                return;
+            }
+            else
+            {
+                ContextFSM->SurvivorPawn->AddMovementInput(RunDir, 1.0f);
+
+                FRotator SmoothRot = FMath::RInterpTo(
+                    ContextFSM->SurvivorPawn->GetActorRotation(),
+                    RunDir.Rotation(),
+                    DeltaTime,
+                    15.0f
+                );
+
+                ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
+
+                return;
+            }
         }
     }
-    else
-    {
-        // Follow path
-        ContextFSM->MoveAlongPath(DeltaTime);
-    }
+
+    // Follow escape path
+    ContextFSM->MoveAlongPath(DeltaTime);
 }
 
 void UFleeState::Exit()

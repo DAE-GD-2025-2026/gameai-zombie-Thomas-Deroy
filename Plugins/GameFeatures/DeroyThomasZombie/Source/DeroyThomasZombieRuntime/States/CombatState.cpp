@@ -38,6 +38,9 @@ void UCombatState::Update(float DeltaTime)
     FRotator TargetRot = ThreatDir.Rotation();
     FRotator SmoothRot = FMath::RInterpTo(ContextFSM->SurvivorPawn->GetActorRotation(), TargetRot, DeltaTime, 15.0f);
     ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
+    
+    // Walk back
+    ContextFSM->SurvivorPawn->AddMovementInput(-ThreatDir, 0.5f);
 
     // Shoot
     TimeSinceLastShot += DeltaTime;
@@ -46,8 +49,15 @@ void UCombatState::Update(float DeltaTime)
         // Shoot if looking at it
         if (FVector::DotProduct(ContextFSM->SurvivorPawn->GetActorForwardVector(), ThreatDir) > 0.9f)
         {
+            float ThreatDist = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->CurrentThreat->GetActorLocation());
+            
+            // Safe ammo
+            if (ThreatDist > 700.0f) return;
+
             int WeaponSlot = -1;
-            if (ContextFSM->HasUsableWeapon(WeaponSlot))
+            
+            // Use the best weapon
+            if (ContextFSM->GetBestWeapon(ThreatDist, WeaponSlot))
             {
                 UInventoryComponent* Inventory = ContextFSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
                 Inventory->UseItem(WeaponSlot);
@@ -57,7 +67,7 @@ void UCombatState::Update(float DeltaTime)
                 // No bullets
                 if (Inventory->GetInventory()[WeaponSlot]->GetValue() <= 0)
                 {
-                    Inventory->RemoveItem(WeaponSlot);
+                    Inventory->RemoveItem(WeaponSlot); 
                 }
             }
             else
