@@ -149,9 +149,7 @@ void UFleeState::Update(float DeltaTime)
 
     float DistToThreat = FVector::Distance(PawnLoc, ThreatToEvade->GetActorLocation());
 
-    float SafeDistance = (ThreatToEvade == ContextFSM->ActivePurgeZone)
-        ? 1400.0f
-        : 1500.0f;
+    float SafeDistance = (ThreatToEvade == ContextFSM->ActivePurgeZone) ? 2000.0f : 2100.0f;
 
     // Start shoulder check when considered safe
     if (DistToThreat > SafeDistance)
@@ -185,7 +183,7 @@ void UFleeState::Update(float DeltaTime)
     bool bIsRunner = ThreatToEvade->GetClass()->GetName().Contains("Runner");
     bool bIsDangerClose = DistToThreat < 500.0f;
 
-    if ((bIsPurge || bIsRunner || bIsDangerClose) && StaminaPct > 0.05f)
+    if ((bIsPurge || bIsRunner || bIsDangerClose) && StaminaPct > 0.15f)
     {
         ContextFSM->SurvivorPawn->StartRunning();
     }

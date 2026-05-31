@@ -86,36 +86,56 @@ void USurvivorFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
         CurrentState->Update(DeltaTime);
     }
     
-    for (int i = CurrentPathIndex; i < CurrentPath.Num() - 1; ++i)
+    // Visualize debug
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (PC && PC->WasInputKeyJustPressed(EKeys::One))
     {
-        DrawDebugLine(GetWorld(), CurrentPath[i], CurrentPath[i+1], FColor::Green, false, -1.0f, 0, 2.0f);
+        bShowDebug = !bShowDebug; // Toggle
     }
 
-    // Debug cone
-    if (SurvivorPawn)
+    if (bShowDebug && SurvivorPawn)
     {
+        // Draw path
+        for (int i = CurrentPathIndex; i < CurrentPath.Num() - 1; ++i)
+        {
+            DrawDebugLine(GetWorld(), CurrentPath[i], CurrentPath[i+1], FColor::Green, false, -1.0f, 0, 2.0f);
+        }
+
+        // Draw vision cone
         FVector PawnLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
         FVector Forward = SurvivorPawn->GetActorForwardVector();
-    
-        float SightRadius = 1000.0f;
-        
         float VisionAngleWidth = FMath::DegreesToRadians(70.0f); 
         float VisionAngleHeight = FMath::DegreesToRadians(5.0f); 
-    
-        DrawDebugCone(
-            GetWorld(), 
-            PawnLoc, 
-            Forward, 
-            SightRadius, 
-            VisionAngleWidth, 
-            VisionAngleHeight, 
-            24,                
-            FColor::Yellow, 
-            false, 
-            -1.0f, 
-            0, 
-            1.5f               
-        );
+        DrawDebugCone(GetWorld(), PawnLoc, Forward, 1000.0f, VisionAngleWidth, VisionAngleHeight, 24, FColor::Yellow, false, -1.0f, 0, 1.5f);
+
+        // Draw memory radar
+        for (AActor* Zombie : KnownZombies) 
+        {
+            if (IsValid(Zombie)) DrawDebugLine(GetWorld(), PawnLoc, Zombie->GetActorLocation(), FColor::Red, false, -1.0f, 0, 1.0f);
+        }
+        for (AHouse* House : KnownHouses) 
+        {
+            if (IsValid(House)) DrawDebugLine(GetWorld(), PawnLoc, House->GetActorLocation(), FColor::Blue, false, -1.0f, 0, 1.0f);
+        }
+
+        // Information
+        FVector HeadLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 150.0f);
+        
+        UHealthComponent* HC = SurvivorPawn->GetComponentByClass<UHealthComponent>();
+        UStaminaComponent* SC = SurvivorPawn->GetComponentByClass<UStaminaComponent>();
+        
+        FString DebugText;
+        if (CurrentState)
+        {
+            FString StateName = CurrentState->GetClass()->GetName();
+            StateName.RemoveFromStart("U"); 
+            DebugText += FString::Printf(TEXT("\nSTATE: %s"), *StateName);
+        }
+
+        if (CurrentThreat) DebugText += TEXT("\nTargeting: ZOMBIE RUN");
+        if (ActivePurgeZone) DebugText += TEXT("\nTargeting: PURGE ZONE RUN");
+        
+        DrawDebugString(GetWorld(), HeadLoc, DebugText, nullptr, FColor::Cyan, 0.0f, true, 1.2f);
     }
 }
 
@@ -301,7 +321,7 @@ bool USurvivorFSM::GetBestWeapon(float TargetDistance, int& OutSlotIndex)
     }
 
     // Shotgun close range, Pistol long range
-    if (TargetDistance < 400.0f)
+    if (TargetDistance < 250.0f)
     {
         if (BestShotgun != -1) { OutSlotIndex = BestShotgun; return true; }
         if (BestPistol != -1) { OutSlotIndex = BestPistol; return true; }
@@ -389,6 +409,14 @@ void USurvivorFSM::EvaluateInventory()
     {
         if (ABaseItem* Item = Items[i])
         {
+            // Throw the garbage
+            if (Item->GetItemType() == EItemType::Garbage)
+            {
+                Inventory->RemoveItem(i); 
+                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::White, TEXT("Tossed some Garbage!"));
+                continue;
+            }
+            
             // Use medkit if health low
             if (Item->GetItemType() == EItemType::Medkit && HealthPercentage < 0.4f)
             {
@@ -401,7 +429,7 @@ void USurvivorFSM::EvaluateInventory()
                 break; 
             }
             // Eat food if stamina low
-            else if (Item->GetItemType() == EItemType::Food && StaminaPercentage < 0.3f)
+            else if (Item->GetItemType() == EItemType::Food && StaminaPercentage < 0.5f)
             {
                 Inventory->UseItem(i);
                 if (Item->GetValue() <= 0)
@@ -423,4 +451,34 @@ void USurvivorFSM::OnDamageSensed(FVector DamageLocation)
     bIsReflexSpinning = true;
     ReflexTargetLocation = SurvivorPawn->GetActorLocation() - (SurvivorPawn->GetActorForwardVector() * 500.0f);
     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Who hit me?!"));
+}
+
+AActor* USurvivorFSM::GetClosestKnownItem(EItemType DesiredType)
+{
+    AActor* BestItem = nullptr;
+    float ClosestDist = 999999.0f;
+    
+    for (int i = KnownItems.Num() - 1; i >= 0; --i)
+    {
+        AActor* ItemActor = KnownItems[i];
+        if (!IsValid(ItemActor)) 
+        {
+            KnownItems.RemoveAt(i);
+            continue;
+        }
+
+        if (ABaseItem* Item = Cast<ABaseItem>(ItemActor))
+        {
+            if (Item->GetItemType() == DesiredType)
+            {
+                float Dist = FVector::Distance(SurvivorPawn->GetActorLocation(), Item->GetActorLocation());
+                if (Dist < ClosestDist)
+                {
+                    ClosestDist = Dist;
+                    BestItem = ItemActor;
+                }
+            }
+        }
+    }
+    return BestItem;
 }

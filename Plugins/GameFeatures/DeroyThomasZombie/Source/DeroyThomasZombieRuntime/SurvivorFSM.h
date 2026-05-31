@@ -35,6 +35,7 @@ public:
 	
 	UPROPERTY()
 	TArray<ABaseItem*> KnownItems;
+	AActor* GetClosestKnownItem(EItemType DesiredType);
 	UPROPERTY()
 	TArray<AHouse*> KnownHouses;
 	
@@ -68,6 +69,9 @@ public:
 	int LastKnownHealth{-1};	
 	bool bIsReflexSpinning{false};
 	FVector ReflexTargetLocation;
+	
+	UPROPERTY()
+	bool bShowDebug{true};
 	
 protected:
 	virtual void BeginPlay() override;

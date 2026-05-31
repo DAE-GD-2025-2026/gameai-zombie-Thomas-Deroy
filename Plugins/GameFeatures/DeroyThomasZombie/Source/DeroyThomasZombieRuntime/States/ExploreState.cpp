@@ -1,5 +1,6 @@
 ﻿#include "ExploreState.h"
 #include "../SurvivorFSM.h"
+#include "Common/InventoryComponent.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Village/House/House.h"
 
@@ -89,6 +90,46 @@ void UExploreState::Update(float DeltaTime)
     // Generate new path if needed
     if (ContextFSM->CurrentPath.IsEmpty() || ContextFSM->CurrentPathIndex >= ContextFSM->CurrentPath.Num())
     {
+        UHealthComponent* HealthComp = ContextFSM->SurvivorPawn->GetComponentByClass<UHealthComponent>();
+        float HealthPct = HealthComp ? (float)HealthComp->GetHealth() / (float)HealthComp->GetMaxHealth() : 1.0f;
+        
+        UStaminaComponent* StamComp = ContextFSM->SurvivorPawn->GetComponentByClass<UStaminaComponent>();
+        float StaminaPct = StamComp ? StamComp->GetCurrentStamina() / StamComp->GetMaxStamina() : 1.0f;
+
+        UInventoryComponent* Inventory = ContextFSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
+        bool bHasMedkit = false;
+        bool bHasFood = false;
+
+        for (auto const& Item : Inventory->GetInventory()) {
+            if (!Item) continue;
+            if (Item->GetItemType() == EItemType::Medkit) bHasMedkit = true;
+            if (Item->GetItemType() == EItemType::Food) bHasFood = true;
+        }
+
+        // Agent remembers where the medkit is, if he needs it
+        if (HealthPct < 0.5f && !bHasMedkit)
+        {
+            if (AActor* RememberedMedkit = ContextFSM->GetClosestKnownItem(EItemType::Medkit))
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Remembered a Medkit! Heading there!"));
+                ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(RememberedMedkit->GetActorLocation());
+                ContextFSM->CurrentPathIndex = 0;
+                if (!ContextFSM->CurrentPath.IsEmpty()) return; 
+            }
+        }
+        
+        // Agent remembers where food is, if he needs it
+        else if (StaminaPct < 0.4f && !bHasFood)
+        {
+            if (AActor* RememberedFood = ContextFSM->GetClosestKnownItem(EItemType::Food))
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Remembered Food! Heading there!"));
+                ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(RememberedFood->GetActorLocation());
+                ContextFSM->CurrentPathIndex = 0;
+                if (!ContextFSM->CurrentPath.IsEmpty()) return; 
+            }
+        }
+        
         // Resume path to target house, if movement interrupted
         if (ContextFSM->TargetHouse)
         {
@@ -131,58 +172,41 @@ void UExploreState::Update(float DeltaTime)
     
     if (bIsParanoiaChecking)
     {
-        ParanoiaCheckDuration += DeltaTime;
-        
-        // Use movement direction
-        FVector MoveDir = ContextFSM->SurvivorPawn->GetVelocity().GetSafeNormal();
-
-        if (MoveDir.IsNearlyZero())
+        if (ParanoiaCheckDuration == 0.0f) 
         {
-            MoveDir = ContextFSM->SurvivorPawn->GetActorForwardVector();
+            CurrentParanoiaRot = ContextFSM->SurvivorPawn->GetActorRotation();
         }
 
-        // Look behind with random angle
+        ParanoiaCheckDuration += DeltaTime;
+        
+        FVector MoveDir = ContextFSM->SurvivorPawn->GetVelocity().GetSafeNormal();
+        if (MoveDir.IsNearlyZero()) MoveDir = ContextFSM->SurvivorPawn->GetActorForwardVector();
+
         FRotator LookBackRot = MoveDir.Rotation();
         LookBackRot.Yaw += ParanoiaAngle; 
-
-        FRotator SmoothRot = FMath::RInterpTo(
-            ContextFSM->SurvivorPawn->GetActorRotation(),
-            LookBackRot,
-            DeltaTime,
-            15.0f
-        );
-
-        ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
-
-        // 1 second looking
-        if (ParanoiaCheckDuration > 1.0f) 
+        LookBackRot.Normalize();
+        
+        CurrentParanoiaRot = FMath::RInterpTo(CurrentParanoiaRot, LookBackRot, DeltaTime, 15.0f);
+        ContextFSM->SurvivorPawn->SetActorRotation(CurrentParanoiaRot);
+        
+        // 1,5 second looking
+        if (ParanoiaCheckDuration > 1.5f) 
         {
             bIsParanoiaChecking = false;
             ParanoiaTimer = 0.0f;
-
-            // Randomize next check interval
             TimeUntilNextCheck = FMath::RandRange(8.0f, 15.0f); 
-            
-            // Restore forward facing rotation
             ContextFSM->SurvivorPawn->SetActorRotation(MoveDir.Rotation()); 
-            
-            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Nothing behind me..."));
         }
     }
     else
     {
         // Count down
         ParanoiaTimer += DeltaTime;
-
         if (ParanoiaTimer >= TimeUntilNextCheck)
         {
             bIsParanoiaChecking = true;
             ParanoiaCheckDuration = 0.0f;
-            
-            // Randomize look back angle
             ParanoiaAngle = FMath::RandRange(160.0f, 200.0f); 
-            
-            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Yellow, TEXT("Just checking behind me..."));
         }
     }
 }

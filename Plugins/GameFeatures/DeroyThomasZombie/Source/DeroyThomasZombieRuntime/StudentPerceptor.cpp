@@ -40,9 +40,6 @@ USurvivorFSM* UStudentPerceptor::GetFSM() const
 
 void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
-	// Ignore failed perception events
-	if (!Stimulus.WasSuccessfullySensed()) return;
-
 	if (USurvivorFSM* FSM = GetFSM())
 	{
 		// Feel Damage
@@ -93,14 +90,11 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 			}
 			return;
 		}
-		
+
 		// Detect items
 		if (ABaseItem* Item = Cast<ABaseItem>(Actor))
 		{
-			// Ignore garbage items
-			if (Item->GetItemType() == EItemType::Garbage) return;
-			
-			if (!FSM->KnownItems.Contains(Item))
+			if (Stimulus.WasSuccessfullySensed() && !FSM->KnownItems.Contains(Item))
 			{
 				FSM->KnownItems.Add(Item);
 

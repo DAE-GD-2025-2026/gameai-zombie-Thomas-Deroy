@@ -22,4 +22,5 @@ private:
 	bool bIsParanoiaChecking{false};
 	float ParanoiaCheckDuration{0.0f};
 	float ParanoiaAngle{180.0f};
+	FRotator CurrentParanoiaRot;
 };
