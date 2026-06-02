@@ -9,13 +9,14 @@
 void UCombatState::Enter(USurvivorFSM* FSM)
 {
     Super::Enter(FSM);
+
     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("State Changed To: Combat"));
 
     if (ContextFSM && ContextFSM->SurvivorPawn)
     {
-        ContextFSM->SurvivorPawn->StopRunning(); // Stop to aim
+        ContextFSM->SurvivorPawn->StopRunning();
         ContextFSM->CurrentPath.Empty();
-        TimeSinceLastShot = FireRate; // Shoot
+        TimeSinceLastShot = FireRate; 
     }
 }
 
@@ -23,7 +24,16 @@ void UCombatState::Update(float DeltaTime)
 {
     Super::Update(DeltaTime);
 
-    // We chill
+    if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
+
+    // If purge zone then flee
+    if (ContextFSM->ActivePurgeZone)
+    {
+        ContextFSM->ChangeState(UFleeState::StaticClass());
+        return;
+    }
+
+    // Lose target -> return to previous behavior
     if (!IsValid(ContextFSM->CurrentThreat))
     {
         ContextFSM->CurrentThreat = nullptr;
@@ -31,51 +41,74 @@ void UCombatState::Update(float DeltaTime)
         return;
     }
 
-    // Aim at zombie
     FVector ThreatDir = (ContextFSM->CurrentThreat->GetActorLocation() - ContextFSM->SurvivorPawn->GetActorLocation()).GetSafeNormal();
     ThreatDir.Z = 0.0f; 
-    
-    FRotator TargetRot = ThreatDir.Rotation();
-    FRotator SmoothRot = FMath::RInterpTo(ContextFSM->SurvivorPawn->GetActorRotation(), TargetRot, DeltaTime, 15.0f);
-    ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
-    
-    // Walk back
-    ContextFSM->SurvivorPawn->AddMovementInput(-ThreatDir, 0.5f);
 
-    // Shoot
+    HandleAimingAndMovement(DeltaTime, ThreatDir);
+    
     TimeSinceLastShot += DeltaTime;
+
     if (TimeSinceLastShot >= FireRate)
     {
-        // Shoot if looking at it
-        if (FVector::DotProduct(ContextFSM->SurvivorPawn->GetActorForwardVector(), ThreatDir) > 0.9f)
+        HandleShooting(ThreatDir);
+    }
+}
+
+void UCombatState::HandleAimingAndMovement(float DeltaTime, FVector ThreatDir)
+{
+    // Rotate toward target
+    FRotator TargetRot = ThreatDir.Rotation();
+
+    FRotator SmoothRot = FMath::RInterpTo(
+        ContextFSM->SurvivorPawn->GetActorRotation(),
+        TargetRot,
+        DeltaTime,
+        15.0f
+    );
+
+    ContextFSM->SurvivorPawn->SetActorRotation(SmoothRot);
+    
+    // backward movement while fighting
+    ContextFSM->SurvivorPawn->AddMovementInput(-ThreatDir, 0.5f);
+}
+
+void UCombatState::HandleShooting(FVector ThreatDir)
+{
+    // Only shoot when roughly aimed at target
+    if (FVector::DotProduct(ContextFSM->SurvivorPawn->GetActorForwardVector(), ThreatDir) > 0.9f)
+    {
+        float ThreatDist = FVector::Distance(
+            ContextFSM->SurvivorPawn->GetActorLocation(),
+            ContextFSM->CurrentThreat->GetActorLocation()
+        );
+
+        // Skip shooting if too far
+        if (ThreatDist > 700.0f) return;
+
+        int WeaponSlot = -1;
+
+        if (ContextFSM->GetBestWeapon(ThreatDist, WeaponSlot))
         {
-            float ThreatDist = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->CurrentThreat->GetActorLocation());
-            
-            // Safe ammo
-            if (ThreatDist > 700.0f) return;
+            UInventoryComponent* Inventory = ContextFSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
 
-            int WeaponSlot = -1;
-            
-            // Use the best weapon
-            if (ContextFSM->GetBestWeapon(ThreatDist, WeaponSlot))
-            {
-                UInventoryComponent* Inventory = ContextFSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
-                Inventory->UseItem(WeaponSlot);
-                TimeSinceLastShot = 0.0f;
-                GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, TEXT("BANG!"));
+            Inventory->UseItem(WeaponSlot);
 
-                // No bullets
-                if (Inventory->GetInventory()[WeaponSlot]->GetValue() <= 0)
-                {
-                    Inventory->RemoveItem(WeaponSlot); 
-                }
-            }
-            else
+            TimeSinceLastShot = 0.0f;
+
+            GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, TEXT("BANG!"));
+
+            // Remove weapon if depleted
+            if (Inventory->GetInventory()[WeaponSlot]->GetValue() <= 0)
             {
-                // No bullets
-                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Out of ammo! Fleeing!"));
-                ContextFSM->ChangeState(UFleeState::StaticClass());
+                Inventory->RemoveItem(WeaponSlot); 
             }
+        }
+        else
+        {
+            // No usable weapon -> flee
+            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Out of ammo! Fleeing!"));
+
+            ContextFSM->ChangeState(UFleeState::StaticClass());
         }
     }
 }

@@ -12,4 +12,9 @@ class DEROYTHOMASZOMBIERUNTIME_API UReturnState : public UBaseState
 public:
 	virtual void Enter(class USurvivorFSM* FSM) override;
 	virtual void Update(float DeltaTime) override;
+	
+private:
+	bool TryScavengeKnownItems();
+	void PathToClosestVisitedHouse();
+	void ResetLocalTownCluster();
 };

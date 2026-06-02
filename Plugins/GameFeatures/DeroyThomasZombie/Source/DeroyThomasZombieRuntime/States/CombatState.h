@@ -16,4 +16,7 @@ public:
 private:
 	float TimeSinceLastShot{0.0f};
 	float FireRate{1.0f}; 
+	
+	void HandleAimingAndMovement(float DeltaTime, FVector ThreatDir);
+	void HandleShooting(FVector ThreatDir);
 };

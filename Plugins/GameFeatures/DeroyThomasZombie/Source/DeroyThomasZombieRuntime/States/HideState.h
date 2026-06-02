@@ -12,4 +12,8 @@ class DEROYTHOMASZOMBIERUNTIME_API UHideState : public UBaseState
 public:
 	virtual void Enter(USurvivorFSM* FSM) override;
 	virtual void Update(float DeltaTime) override;
+	
+private:
+	void PathToClosestAvailableHouse();
+	void EvaluateThreatDistance();
 };

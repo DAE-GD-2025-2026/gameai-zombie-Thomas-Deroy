@@ -18,4 +18,8 @@ private:
 	bool bIsCheckingBehind{false};
 	float FleeTime{0.0f};
 	float CheckTimer{0.0f};
+	
+	bool HandleShoulderCheck(float DeltaTime, FVector PawnLoc, AActor* ThreatToEvade, FVector LastKnownThreatLoc);
+	void UpdateSafetyAndStamina(float DistToThreat, bool bIsPurge);
+	void GenerateEscapeRoute(float DeltaTime, FVector PawnLoc, AActor* ThreatToEvade, bool bIsPurge, float DistToThreat);
 };

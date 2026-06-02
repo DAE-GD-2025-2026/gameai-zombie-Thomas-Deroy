@@ -23,4 +23,11 @@ private:
 	float ParanoiaCheckDuration{0.0f};
 	float ParanoiaAngle{180.0f};
 	FRotator CurrentParanoiaRot;
+	
+	bool HandleStartSpin(float DeltaTime);
+	bool CheckSuppliesAndReturn(float DeltaTime);
+	bool HandleHouseSearching();
+	bool CheckDesperationMemory();
+	void GenerateExplorationPath();
+	void HandleParanoia(float DeltaTime);
 };

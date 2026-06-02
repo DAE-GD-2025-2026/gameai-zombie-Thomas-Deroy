@@ -10,17 +10,38 @@
 void UHideState::Enter(USurvivorFSM* FSM)
 {
     Super::Enter(FSM);
+
     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan, TEXT("State Changed To: Hide"));
 
-    if (!ContextFSM) return;
+    if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
     
     ContextFSM->SurvivorPawn->StopRunning();
 
-    // Find closest house known
+    // Find nearest house to hide in
+    PathToClosestAvailableHouse();
+}
+
+void UHideState::Update(float DeltaTime)
+{
+    Super::Update(DeltaTime);
+
+    if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
+
+    // Check if threat is still close
+    EvaluateThreatDistance();
+
+    // Move toward hiding spot
+    if (ContextFSM->CurrentPathIndex < ContextFSM->CurrentPath.Num())
+    {
+        ContextFSM->MoveAlongPath(DeltaTime);
+    }
+}
+
+void UHideState::PathToClosestAvailableHouse()
+{
     AHouse* ClosestHouse = nullptr;
     float ClosestDist = FLT_MAX;
 
-    // Check all known and visited houses
     TArray<AHouse*> AllHouses = ContextFSM->KnownHouses;
     AllHouses.Append(ContextFSM->VisitedHouses);
 
@@ -28,7 +49,11 @@ void UHideState::Enter(USurvivorFSM* FSM)
     {
         if (IsValid(House))
         {
-            float Dist = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), House->GetActorLocation());
+            float Dist = FVector::Distance(
+                ContextFSM->SurvivorPawn->GetActorLocation(),
+                House->GetActorLocation()
+            );
+
             if (Dist < ClosestDist)
             {
                 ClosestDist = Dist;
@@ -39,75 +64,68 @@ void UHideState::Enter(USurvivorFSM* FSM)
 
     if (ClosestHouse)
     {
-        // Run to house
         ContextFSM->TargetHouse = ClosestHouse;
-        ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(ClosestHouse->GetBounds().Origin);
+
+        ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(
+            ClosestHouse->GetBounds().Origin
+        );
+
         ContextFSM->CurrentPathIndex = 0;
     }
     else
     {
-        // No house
+        // No shelter available, return to previous behavior
         ContextFSM->ResumePreviousState();
     }
 }
 
-void UHideState::Update(float DeltaTime)
+void UHideState::EvaluateThreatDistance()
 {
-    Super::Update(DeltaTime);
-    
-    if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
-
-    // Check for threat
-    if (IsValid(ContextFSM->CurrentThreat))
+    if (!IsValid(ContextFSM->CurrentThreat))
     {
-        float ThreatDist = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->CurrentThreat->GetActorLocation());
-
-        if (ThreatDist < 800.0f) // Zombie is inside house
-        {
-            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("You're cooked!"));
-            
-            int WeaponSlot = -1;
-            UHealthComponent* HealthComp = ContextFSM->SurvivorPawn->GetComponentByClass<UHealthComponent>();
-            float HealthPct = HealthComp ? (float)HealthComp->GetHealth() / (float)HealthComp->GetMaxHealth() : 1.0f;
-
-            // We have weapon
-            if (ContextFSM->HasUsableWeapon(WeaponSlot) && HealthPct > 0.4f)
-            {
-                ContextFSM->ChangeState(UCombatState::StaticClass());
-            }
-            else // We don't have weapon
-            {
-                if (ContextFSM->TargetHouse)
-                {
-                    ContextFSM->VisitedHouses.Add(ContextFSM->TargetHouse);
-                    ContextFSM->KnownHouses.Remove(ContextFSM->TargetHouse);
-                }
-                ContextFSM->ChangeState(UFleeState::StaticClass());
-            }
-            return;
-        }
-        
-        // Return explore state when safe
-        if (ThreatDist > 1800.0f)
-        {
-            ContextFSM->CurrentThreat = nullptr;
-            ContextFSM->ResumePreviousState();
-
-            return;
-        }
-    }
-    else
-    {
-        // Return explore state when safe
         ContextFSM->CurrentThreat = nullptr;
         ContextFSM->ResumePreviousState();
-
         return;
     }
 
-    // Move to hiding spot
-    if (ContextFSM->CurrentPathIndex < ContextFSM->CurrentPath.Num())
+    float ThreatDist = FVector::Distance(
+        ContextFSM->SurvivorPawn->GetActorLocation(),
+        ContextFSM->CurrentThreat->GetActorLocation()
+    );
+
+    // Too close -> panic decision
+    if (ThreatDist < 800.0f)
     {
-        ContextFSM->MoveAlongPath(DeltaTime);
+        GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("You're cooked!"));
+        
+        int WeaponSlot = -1;
+
+        UHealthComponent* HealthComp = ContextFSM->SurvivorPawn->GetComponentByClass<UHealthComponent>();
+
+        float HealthPct = HealthComp
+            ? (float)HealthComp->GetHealth() / (float)HealthComp->GetMaxHealth()
+            : 1.0f;
+
+        if (ContextFSM->HasUsableWeapon(WeaponSlot) && HealthPct > 0.4f)
+        {
+            ContextFSM->ChangeState(UCombatState::StaticClass());
+        }
+        else
+        {
+            // Mark house as unsafe
+            if (ContextFSM->TargetHouse)
+            {
+                ContextFSM->VisitedHouses.Add(ContextFSM->TargetHouse);
+                ContextFSM->KnownHouses.Remove(ContextFSM->TargetHouse);
+            }
+
+            ContextFSM->ChangeState(UFleeState::StaticClass());
+        }
+    }
+    // Safe again -> return to previous behavior
+    else if (ThreatDist > 1800.0f)
+    {
+        ContextFSM->CurrentThreat = nullptr;
+        ContextFSM->ResumePreviousState();
     }
 }

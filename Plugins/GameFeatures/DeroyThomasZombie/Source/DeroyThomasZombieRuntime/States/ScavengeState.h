@@ -25,4 +25,8 @@ private:
 	UHealthComponent* HealthComp;
 	UPROPERTY()
 	UStaminaComponent* StaminaComp;
+	
+	bool TryGrabItem();
+	void HandleFullInventory();
+	bool FindNextKnownItem();
 };
