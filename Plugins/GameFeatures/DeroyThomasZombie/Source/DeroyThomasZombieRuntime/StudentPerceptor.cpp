@@ -40,88 +40,84 @@ USurvivorFSM* UStudentPerceptor::GetFSM() const
 
 void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
-	if (USurvivorFSM* FSM = GetFSM())
-	{
-		// Feel Damage
-		if (Stimulus.Type == UAISense::GetSenseID<UAISense_Damage>())
-		{
-			if (Stimulus.WasSuccessfullySensed())
-			{
-				FSM->OnDamageSensed(Stimulus.StimulusLocation);
-			}
-			return;
-		}
-		
-		// Detect zombie threats
-		if (ABaseZombie* Zombie = Cast<ABaseZombie>(Actor))
-		{
-			if (Stimulus.WasSuccessfullySensed())
-			{
-				// Remember zombie
-				FSM->KnownZombies.AddUnique(Zombie);
-				
-				// If runner, focus that thing
-				if (Zombie->GetClass()->GetName().Contains("Runner")) 
-				{
-					FSM->CurrentThreat = Zombie; 
-				}
-				
-				// Act
-				FSM->OnZombieSpotted(Zombie);
-			}
-			else
-			{
-				// Forget zombie
-				FSM->KnownZombies.Remove(Zombie);
-			}
-			return;
-		}
-		
-		// Detect purgezone
-		if (APurgeZone* PurgeZone = Cast<APurgeZone>(Actor))
-		{
-			if (Stimulus.WasSuccessfullySensed())
-			{
-				FSM->OnPurgeZoneSpotted(PurgeZone);
-			}
-			else
-			{
-				FSM->OnPurgeZoneLost(PurgeZone);
-			}
-			return;
-		}
+	USurvivorFSM* FSM = GetFSM();
+	if (!FSM) return;
+	
+	if (Stimulus.Type == UAISense::GetSenseID<UAISense_Damage>()) HandleDamageSensed(FSM, Stimulus);
+	else if (Actor->IsA(ABaseZombie::StaticClass())) HandleZombieSensed(FSM, Actor, Stimulus);
+	else if (Actor->IsA(APurgeZone::StaticClass())) HandlePurgeZoneSensed(FSM, Actor, Stimulus);
+	else if (Actor->IsA(ABaseItem::StaticClass())) HandleItemSensed(FSM, Actor, Stimulus);
+	else if (Actor->IsA(AHouse::StaticClass())) HandleHouseSensed(FSM, Actor);
+}
 
-		// Detect items
-		if (ABaseItem* Item = Cast<ABaseItem>(Actor))
-		{
-			if (Stimulus.WasSuccessfullySensed() && !FSM->KnownItems.Contains(Item))
-			{
-				FSM->KnownItems.Add(Item);
+void UStudentPerceptor::HandleDamageSensed(USurvivorFSM* FSM, FAIStimulus& Stimulus)
+{
+    if (Stimulus.WasSuccessfullySensed())
+    {
+        FSM->OnDamageSensed(Stimulus.StimulusLocation);
+    }
+}
 
-				// Scavenging if inventory has space and no threat
-				UInventoryComponent* Inventory = FSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
-				if (Inventory && Inventory->GetInventory().Contains(nullptr) && !FSM->CurrentThreat && !FSM->TargetItem)
-				{
-					FSM->TargetItem = Item;
-					FSM->ChangeState(UScavengeState::StaticClass());
-				}
-			}
-		}
-		
-		// Detect houses
-		if (AHouse* House = Cast<AHouse>(Actor))
-		{
-			if (!FSM->KnownHouses.Contains(House) && !FSM->VisitedHouses.Contains(House))
-			{
-				FSM->KnownHouses.Add(House);
-				
-				FSM->TotalHousesDiscovered++;
-				FSM->DiscoveredHouseIDs.Add(House, FSM->TotalHousesDiscovered);
+void UStudentPerceptor::HandleZombieSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus)
+{
+    ABaseZombie* Zombie = Cast<ABaseZombie>(Actor);
+    if (!Zombie) return;
 
-				GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Blue, TEXT("Spotted a House!"));
-			}
+    if (Stimulus.WasSuccessfullySensed())
+    {
+        FSM->KnownZombies.AddUnique(Zombie);
+        
+        if (Zombie->GetClass()->GetName().Contains("Runner")) 
+        {
+            FSM->CurrentThreat = Zombie; 
+        }
+        FSM->OnZombieSpotted(Zombie);
+    }
+    else
+    {
+        FSM->KnownZombies.Remove(Zombie);
+    }
+}
 
-			return;
-		}
-	}
+void UStudentPerceptor::HandlePurgeZoneSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus)
+{
+    APurgeZone* PurgeZone = Cast<APurgeZone>(Actor);
+    if (!PurgeZone) return;
+
+    if (Stimulus.WasSuccessfullySensed()) FSM->OnPurgeZoneSpotted(PurgeZone);
+    else FSM->OnPurgeZoneLost(PurgeZone);
+}
+
+void UStudentPerceptor::HandleItemSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus)
+{
+    ABaseItem* Item = Cast<ABaseItem>(Actor);
+    if (!Item) return;
+
+    if (Stimulus.WasSuccessfullySensed() && !FSM->KnownItems.Contains(Item))
+    {
+        FSM->KnownItems.Add(Item);
+
+        UInventoryComponent* Inventory = FSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
+        if (Inventory && Inventory->GetInventory().Contains(nullptr) && !FSM->CurrentThreat && !FSM->TargetItem)
+        {
+            FSM->TargetItem = Item;
+            FSM->ChangeState(UScavengeState::StaticClass());
+        }
+    }
+}
+
+void UStudentPerceptor::HandleHouseSensed(USurvivorFSM* FSM, AActor* Actor)
+{
+    AHouse* House = Cast<AHouse>(Actor);
+    if (!House) return;
+
+    if (!FSM->KnownHouses.Contains(House) && !FSM->VisitedHouses.Contains(House))
+    {
+        FSM->KnownHouses.Add(House);
+        
+        FSM->TotalHousesDiscovered++;
+        FSM->DiscoveredHouseIDs.Add(House, FSM->TotalHousesDiscovered);
+
+        GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Blue, TEXT("Spotted a House!"));
+    }
 }

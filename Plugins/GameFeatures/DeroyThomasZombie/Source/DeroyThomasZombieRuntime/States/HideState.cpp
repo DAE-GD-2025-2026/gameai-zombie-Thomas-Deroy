@@ -112,13 +112,7 @@ void UHideState::EvaluateThreatDistance()
         }
         else
         {
-            // Mark house as unsafe
-            if (ContextFSM->TargetHouse)
-            {
-                ContextFSM->VisitedHouses.Add(ContextFSM->TargetHouse);
-                ContextFSM->KnownHouses.Remove(ContextFSM->TargetHouse);
-            }
-
+            ContextFSM->TargetHouse = nullptr; 
             ContextFSM->ChangeState(UFleeState::StaticClass());
         }
     }

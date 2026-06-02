@@ -124,34 +124,31 @@ bool UExploreState::HandleHouseSearching()
 {
     if (ContextFSM->TargetHouse)
     {
-        float DistToDestination = FLT_MAX;
-
+        float DistToHouse = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->TargetHouse->GetActorLocation());
+        
+        bool bReachedWaypoint = false;
         if (ContextFSM->CurrentPath.Num() > 0)
         {
-            DistToDestination =
-                FVector::Distance(
-                    ContextFSM->SurvivorPawn->GetActorLocation(),
-                    ContextFSM->CurrentPath.Last());
+            float DistToWaypoint = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->CurrentPath.Last());
+            if (DistToWaypoint < 150.0f || ContextFSM->CurrentPathIndex >= ContextFSM->CurrentPath.Num())
+            {
+                bReachedWaypoint = true;
+            }
         }
-
-        if (DistToDestination < 100.0f ||
-            ContextFSM->CurrentPath.IsEmpty() ||
-            ContextFSM->CurrentPathIndex >= ContextFSM->CurrentPath.Num())
+        
+        if ((bReachedWaypoint || ContextFSM->CurrentPath.IsEmpty()) && DistToHouse < 800.0f)
         {
             if (SearchWaypoints > 0)
             {
                 SearchWaypoints--;
-
                 FHouseBounds Bounds = ContextFSM->TargetHouse->GetBounds();
-
+                
                 FVector RandomOffset;
                 RandomOffset.X = FMath::RandRange(-Bounds.Extent.X * 0.4f, Bounds.Extent.X * 0.4f);
                 RandomOffset.Y = FMath::RandRange(-Bounds.Extent.Y * 0.4f, Bounds.Extent.Y * 0.4f);
                 RandomOffset.Z = 0.0f;
 
-                ContextFSM->CurrentPath =
-                    ContextFSM->SurvivorPawn->CalculatePath(Bounds.Origin + RandomOffset);
-
+                ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(Bounds.Origin + RandomOffset);
                 ContextFSM->CurrentPathIndex = 0;
                 return true;
             }
@@ -227,12 +224,8 @@ void UExploreState::GenerateExplorationPath()
 
         ContextFSM->CurrentPathIndex = 0;
 
-        if (!ContextFSM->CurrentPath.IsEmpty())
-            return;
-
-        // Fail -> remove house from memory
-        ContextFSM->VisitedHouses.AddUnique(ContextFSM->TargetHouse);
-        ContextFSM->KnownHouses.Remove(ContextFSM->TargetHouse);
+        if (!ContextFSM->CurrentPath.IsEmpty()) return;
+        
         ContextFSM->TargetHouse = nullptr;
     }
 
@@ -268,8 +261,7 @@ void UExploreState::GenerateExplorationPath()
 
     FVector Target = ContextFSM->SurvivorPawn->GetActorLocation() + (Dir * 1500.0f);
 
-    ContextFSM->CurrentPath =
-        ContextFSM->SurvivorPawn->CalculatePath(Target);
+    ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(Target);
 
     ContextFSM->CurrentPathIndex = 0;
 }

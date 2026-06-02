@@ -28,4 +28,10 @@ public:
 	
 private:
 	USurvivorFSM* GetFSM() const;
+	
+	void HandleDamageSensed(USurvivorFSM* FSM, FAIStimulus& Stimulus);
+	void HandleZombieSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus);
+	void HandlePurgeZoneSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus);
+	void HandleItemSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus);
+	void HandleHouseSensed(USurvivorFSM* FSM, AActor* Actor);
 };

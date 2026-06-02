@@ -86,11 +86,15 @@ public:
 	// Debug
 	UPROPERTY()
 	bool bShowDebug{true};
+	
 	UPROPERTY()
 	TArray<AHouse*> AllLevelHouses;
+	
 	UPROPERTY()
 	TMap<AHouse*, int32> DiscoveredHouseIDs;
+	
 	int32 TotalHousesDiscovered{0};
+	
 	UPROPERTY()
 	TArray<AActor*> AllLevelItems;
 	
@@ -100,4 +104,9 @@ protected:
 private:
 	UPROPERTY()
 	UBaseState* CurrentState;
+	
+	void HandleDebugDrawing();
+	void UpdateHealthMonitor();
+	bool HandleReflexSpinning(float DeltaTime);
+	void MonitorComfortZone();
 };
