@@ -16,5 +16,6 @@ public:
 	
 private:
 	bool bIsCheckingBehind{false};
+	float FleeTime{0.0f};
 	float CheckTimer{0.0f};
 };

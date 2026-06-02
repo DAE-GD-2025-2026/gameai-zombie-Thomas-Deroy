@@ -30,7 +30,7 @@ void UScavengeState::Update(float DeltaTime)
     // Return to explore if wrong data
     if (!ContextFSM || !ContextFSM->SurvivorPawn || !ContextFSM->TargetItem || !Inventory)
     {
-        ContextFSM->ChangeState(UExploreState::StaticClass());
+        ContextFSM->ResumePreviousState();
 
         return;
     }
@@ -95,7 +95,7 @@ void UScavengeState::Update(float DeltaTime)
                     }
                     
                     // Return to explore
-                    ContextFSM->ChangeState(UExploreState::StaticClass());
+                    ContextFSM->ResumePreviousState();
 
                     return;
                 }
@@ -105,16 +105,44 @@ void UScavengeState::Update(float DeltaTime)
         // Handle full inventory
         if (!bGrabbedSuccessfully)
         {
-            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Inventory is FULL! Leaving item."));
-            
-            // Forget item target
-            ContextFSM->KnownItems.Remove(ContextFSM->TargetItem);
-            ContextFSM->TargetItem = nullptr;
-            
-            // Return to explore
-            ContextFSM->ChangeState(UExploreState::StaticClass());
-        }
+            bool bSwapped = false;
+            EItemType TargetType = ContextFSM->TargetItem->GetItemType();
 
+            // Only valuable items
+            if (TargetType == EItemType::Food || TargetType == EItemType::Shotgun || TargetType == EItemType::Pistol || TargetType == EItemType::Medkit)
+            {
+                auto const& Items = Inventory->GetInventory();
+                for (int i = 0; i < Items.Num(); ++i)
+                {
+                    if (Items[i] != nullptr)
+                    {
+                        // Drop food if there are better items
+                        if (Items[i]->GetItemType() == EItemType::Food && StaminaComp && (StaminaComp->GetCurrentStamina() / StaminaComp->GetMaxStamina()) > 0.5f)
+                        {
+                            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("Dropped Food for a better item!"));
+                            Inventory->RemoveItem(i);
+                            Inventory->GrabItem(i, ContextFSM->TargetItem);
+                            bSwapped = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!bSwapped)
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Inventory FULL! No useless items to drop. Leaving it."));
+            }
+            else
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, TEXT("Successfully Swapped Item!"));
+                ContextFSM->KnownItems.Remove(ContextFSM->TargetItem);
+            }
+
+            // Cleanup target
+            ContextFSM->TargetItem = nullptr;
+            ContextFSM->ResumePreviousState();
+        }
         return;
     }
     // Generate path to item

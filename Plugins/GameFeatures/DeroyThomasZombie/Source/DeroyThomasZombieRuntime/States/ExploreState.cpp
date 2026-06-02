@@ -1,4 +1,7 @@
 ﻿#include "ExploreState.h"
+
+#include "ReturnState.h"
+#include "ScavengeState.h"
 #include "../SurvivorFSM.h"
 #include "Common/InventoryComponent.h"
 #include "Survivor/SurvivorPawn.h"
@@ -42,6 +45,45 @@ void UExploreState::Update(float DeltaTime)
         }
         
         return; 
+    }
+    
+    // Check if we have empty slots
+    UInventoryComponent* Inventory = ContextFSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
+    int EmptySlots = 0;
+    if (Inventory)
+    {
+        for (auto const& Item : Inventory->GetInventory()) {
+            if (!Item) EmptySlots++;
+        }
+    }
+        
+    // Check if we still have stuff
+    if (ContextFSM->KnownHouses.IsEmpty() && ContextFSM->VisitedHouses.Num() > 0)
+    {
+        ContextFSM->TimeSinceLastTown += DeltaTime;
+            
+        // If we are low on supplies we return
+        if (EmptySlots >= 3 && ContextFSM->TimeSinceLastTown > 10.0f)
+        {
+            ContextFSM->ChangeState(UReturnState::StaticClass());
+            return;
+        }
+        // Otherwise just explore and find new town
+        if (ContextFSM->TimeSinceLastTown > 30.0f) 
+        {
+            ContextFSM->KnownHouses = ContextFSM->VisitedHouses;
+            ContextFSM->VisitedHouses.Empty();
+            
+            ContextFSM->TimeSinceLastTown = 0.0f; 
+            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("Wandered enough. Checking old houses!"));
+            ContextFSM->ChangeState(UReturnState::StaticClass());
+            return;
+        }
+    }
+    else
+    {
+        // Reset
+        ContextFSM->TimeSinceLastTown = 0.0f;
     }
     
     // Check if target house was reached
@@ -90,13 +132,19 @@ void UExploreState::Update(float DeltaTime)
     // Generate new path if needed
     if (ContextFSM->CurrentPath.IsEmpty() || ContextFSM->CurrentPathIndex >= ContextFSM->CurrentPath.Num())
     {
+        if (bIsParanoiaChecking)
+        {
+            bIsParanoiaChecking = false;
+            ParanoiaTimer = 0.0f;
+            TimeUntilNextCheck = FMath::RandRange(8.0f, 15.0f);
+        }
+        
         UHealthComponent* HealthComp = ContextFSM->SurvivorPawn->GetComponentByClass<UHealthComponent>();
         float HealthPct = HealthComp ? (float)HealthComp->GetHealth() / (float)HealthComp->GetMaxHealth() : 1.0f;
         
         UStaminaComponent* StamComp = ContextFSM->SurvivorPawn->GetComponentByClass<UStaminaComponent>();
         float StaminaPct = StamComp ? StamComp->GetCurrentStamina() / StamComp->GetMaxStamina() : 1.0f;
-
-        UInventoryComponent* Inventory = ContextFSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
+        
         bool bHasMedkit = false;
         bool bHasFood = false;
 
@@ -111,10 +159,10 @@ void UExploreState::Update(float DeltaTime)
         {
             if (AActor* RememberedMedkit = ContextFSM->GetClosestKnownItem(EItemType::Medkit))
             {
-                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Remembered a Medkit! Heading there!"));
-                ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(RememberedMedkit->GetActorLocation());
-                ContextFSM->CurrentPathIndex = 0;
-                if (!ContextFSM->CurrentPath.IsEmpty()) return; 
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Desperation: Fetching Medkit!"));
+                ContextFSM->TargetItem = Cast<ABaseItem>(RememberedMedkit);
+                ContextFSM->ChangeState(UScavengeState::StaticClass());
+                return; 
             }
         }
         
@@ -123,10 +171,10 @@ void UExploreState::Update(float DeltaTime)
         {
             if (AActor* RememberedFood = ContextFSM->GetClosestKnownItem(EItemType::Food))
             {
-                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Remembered Food! Heading there!"));
-                ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(RememberedFood->GetActorLocation());
-                ContextFSM->CurrentPathIndex = 0;
-                if (!ContextFSM->CurrentPath.IsEmpty()) return; 
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Desperation: Fetching Food!"));
+                ContextFSM->TargetItem = Cast<ABaseItem>(RememberedFood);
+                ContextFSM->ChangeState(UScavengeState::StaticClass());
+                return; 
             }
         }
         
@@ -136,22 +184,41 @@ void UExploreState::Update(float DeltaTime)
             ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(ContextFSM->TargetHouse->GetBounds().Origin);
             ContextFSM->CurrentPathIndex = 0;
 
-            return;
+            if (!ContextFSM->CurrentPath.IsEmpty()) return;
+            else
+            {
+                ContextFSM->VisitedHouses.AddUnique(ContextFSM->TargetHouse);
+                ContextFSM->KnownHouses.Remove(ContextFSM->TargetHouse);
+                ContextFSM->TargetHouse = nullptr;
+            }
         }
         
         // Move to known house first
         if (ContextFSM->KnownHouses.Num() > 0 && !ContextFSM->TargetHouse)
         {
-            ContextFSM->TargetHouse = ContextFSM->KnownHouses[0];
+            // Pick random house
+            int RandomHouseIndex = FMath::RandRange(0, ContextFSM->KnownHouses.Num() - 1);
+            ContextFSM->TargetHouse = ContextFSM->KnownHouses[RandomHouseIndex];
             SearchWaypoints = 2; 
             
             ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(ContextFSM->TargetHouse->GetBounds().Origin);
             ContextFSM->CurrentPathIndex = 0; 
-            return;
+            
+            if (!ContextFSM->CurrentPath.IsEmpty()) return;
+            else
+            {
+                ContextFSM->VisitedHouses.AddUnique(ContextFSM->TargetHouse);
+                ContextFSM->KnownHouses.Remove(ContextFSM->TargetHouse);
+                ContextFSM->TargetHouse = nullptr;
+            }
         }
         
         // Wander in random direction
-        FVector ForwardDir = ContextFSM->SurvivorPawn->GetActorForwardVector();
+        FVector ForwardDir = ContextFSM->SurvivorPawn->GetVelocity().GetSafeNormal();
+        if (ForwardDir.IsNearlyZero()) 
+        {
+            ForwardDir = ContextFSM->SurvivorPawn->GetActorForwardVector();
+        }
 
         float RandomAngle = FMath::RandRange(-60.0f, 60.0f);
 

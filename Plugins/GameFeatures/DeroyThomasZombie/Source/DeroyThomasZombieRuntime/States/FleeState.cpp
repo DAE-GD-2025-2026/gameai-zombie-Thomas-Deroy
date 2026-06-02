@@ -13,6 +13,7 @@ void UFleeState::Enter(USurvivorFSM* FSM)
 
     bIsCheckingBehind = false;
     CheckTimer = 0.0f;
+    FleeTime = 0.0f;
     
     if (ContextFSM && ContextFSM->SurvivorPawn)
     {
@@ -31,9 +32,7 @@ void UFleeState::Update(float DeltaTime)
     // Track the current threat
     static FVector LastKnownThreatLoc = FVector::ZeroVector;
 
-    AActor* ThreatToEvade = ContextFSM->ActivePurgeZone
-        ? ContextFSM->ActivePurgeZone
-        : ContextFSM->CurrentThreat;
+    AActor* ThreatToEvade = ContextFSM->ActivePurgeZone ? ContextFSM->ActivePurgeZone : ContextFSM->CurrentThreat;
 
     if (ThreatToEvade)
     {
@@ -70,6 +69,7 @@ void UFleeState::Update(float DeltaTime)
         {
             bIsCheckingBehind = false;
             CheckTimer = 0.0f;
+            FleeTime = 0.0f;
             
             float DistToThreat = FVector::Distance(PawnLoc, ThreatToEvade->GetActorLocation());
             int HordeSize = ContextFSM->KnownZombies.Num();
@@ -133,7 +133,7 @@ void UFleeState::Update(float DeltaTime)
             OriginalDir.Z = 0.0f;
             ContextFSM->SurvivorPawn->SetActorRotation(OriginalDir.Rotation());
 
-            ContextFSM->ChangeState(UExploreState::StaticClass());
+            ContextFSM->ResumePreviousState();
         }
 
         return;
@@ -142,9 +142,14 @@ void UFleeState::Update(float DeltaTime)
     // Return to exploring if no threat exists
     if (!ThreatToEvade)
     {
-        ContextFSM->ChangeState(UExploreState::StaticClass());
+        ContextFSM->ResumePreviousState();
 
         return;
+    }
+    
+    if (!bIsCheckingBehind)
+    {
+        FleeTime += DeltaTime;
     }
 
     float DistToThreat = FVector::Distance(PawnLoc, ThreatToEvade->GetActorLocation());
@@ -152,34 +157,49 @@ void UFleeState::Update(float DeltaTime)
     float SafeDistance = (ThreatToEvade == ContextFSM->ActivePurgeZone) ? 2000.0f : 2100.0f;
 
     // Start shoulder check when considered safe
-    if (DistToThreat > SafeDistance)
+    if ((FleeTime > 5.0f || DistToThreat > SafeDistance) && !bIsCheckingBehind)
     {
         if (ThreatToEvade == ContextFSM->ActivePurgeZone)
         {
-            ContextFSM->ActivePurgeZone = nullptr;
+            // If threat is too close run
+            if (DistToThreat > SafeDistance)
+            {
+                ContextFSM->ActivePurgeZone = nullptr;
+                bIsCheckingBehind = true;
+                CheckTimer = 0.0f;
+                ContextFSM->CurrentPath.Empty();
+                return;
+            }
         }
         else
         {
+            // No threat we safe
             ContextFSM->CurrentThreat = nullptr;
+            bIsCheckingBehind = true;
+            CheckTimer = 0.0f;
+            ContextFSM->CurrentPath.Empty();
+            return;
         }
-        
-        bIsCheckingBehind = true;
-        CheckTimer = 0.0f;
-
-        // Stop path following during shoulder check
-        ContextFSM->CurrentPath.Empty();
-
-        return;
     }
 
     // Manage stamina while fleeing
     UStaminaComponent* StaminaComp = ContextFSM->SurvivorPawn->GetComponentByClass<UStaminaComponent>();
 
-    float StaminaPct = StaminaComp
-        ? (StaminaComp->GetCurrentStamina() / StaminaComp->GetMaxStamina())
-        : 1.0f;
+    float StaminaPct = StaminaComp ? (StaminaComp->GetCurrentStamina() / StaminaComp->GetMaxStamina()) : 1.0f;
 
     bool bIsPurge = (ThreatToEvade == ContextFSM->ActivePurgeZone);
+    
+    if (!bIsPurge && DistToThreat < 250.0f)
+    {
+        int WSlot;
+        if (ContextFSM->GetBestWeapon(DistToThreat, WSlot))
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Fuck it american way"));
+            ContextFSM->ChangeState(UCombatState::StaticClass());
+            return;
+        }
+    }
+    
     bool bIsRunner = ThreatToEvade->GetClass()->GetName().Contains("Runner");
     bool bIsDangerClose = DistToThreat < 500.0f;
 
@@ -230,6 +250,52 @@ void UFleeState::Update(float DeltaTime)
 
         FVector EscapeLocation = PawnLoc + (RunDir * 1200.0f);
 
+        // Look for shelter if unarmed
+        int DummySlot;
+
+        // Search for houses if no weapons
+        if (!bIsPurge && !ContextFSM->HasUsableWeapon(DummySlot))
+        {
+            AHouse* BestHouse = nullptr;
+            float ClosestDist = FLT_MAX;
+            
+            TArray<AHouse*> AllRememberedHouses = ContextFSM->KnownHouses;
+            AllRememberedHouses.Append(ContextFSM->VisitedHouses);
+
+            for (AHouse* House : AllRememberedHouses)
+            {
+                if (IsValid(House))
+                {
+                    FVector DirToHouse = (House->GetActorLocation() - PawnLoc).GetSafeNormal();
+            
+                    // Ignore houses that has zombies blocking it
+                    if (FVector::DotProduct(RunDir, DirToHouse) > -0.3f)
+                    {
+                        float DistToHouse = FVector::Distance(PawnLoc, House->GetActorLocation());
+
+                        if (DistToHouse < ClosestDist)
+                        {
+                            ClosestDist = DistToHouse;
+                            BestHouse = House;
+                        }
+                    }
+                }
+            }
+
+            // Use nearest safe house as escape target
+            if (BestHouse)
+            {
+                EscapeLocation = BestHouse->GetBounds().Origin;
+
+                GEngine->AddOnScreenDebugMessage(
+                    -1,
+                    3.f,
+                    FColor::Yellow,
+                    TEXT("Defenseless! Scrambling to nearest house for weapons!")
+                );
+            }
+        }
+        
         ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(EscapeLocation);
         ContextFSM->CurrentPathIndex = 0;
 

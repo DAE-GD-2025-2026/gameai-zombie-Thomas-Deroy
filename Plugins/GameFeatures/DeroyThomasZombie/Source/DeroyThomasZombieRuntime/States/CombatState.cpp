@@ -27,7 +27,7 @@ void UCombatState::Update(float DeltaTime)
     if (!IsValid(ContextFSM->CurrentThreat))
     {
         ContextFSM->CurrentThreat = nullptr;
-        ContextFSM->ChangeState(UExploreState::StaticClass());
+        ContextFSM->ResumePreviousState();
         return;
     }
 

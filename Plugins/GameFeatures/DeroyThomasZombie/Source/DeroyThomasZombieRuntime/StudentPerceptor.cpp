@@ -114,6 +114,9 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 			if (!FSM->KnownHouses.Contains(House) && !FSM->VisitedHouses.Contains(House))
 			{
 				FSM->KnownHouses.Add(House);
+				
+				FSM->TotalHousesDiscovered++;
+				FSM->DiscoveredHouseIDs.Add(House, FSM->TotalHousesDiscovered);
 
 				GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Blue, TEXT("Spotted a House!"));
 			}

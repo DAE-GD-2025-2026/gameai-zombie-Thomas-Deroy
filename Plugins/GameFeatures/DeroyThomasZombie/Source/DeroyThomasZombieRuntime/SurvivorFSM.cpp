@@ -9,6 +9,9 @@
 #include "States/HideState.h"
 #include "Common/InventoryComponent.h"
 #include "Common/HealthComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "States/ReturnState.h"
+#include "States/ScavengeState.h"
 
 USurvivorFSM::USurvivorFSM()
 {
@@ -19,9 +22,31 @@ void USurvivorFSM::BeginPlay()
 {
     Super::BeginPlay();
 
+    bShowDebug = true; 
+
     if (AAIController* AIController = Cast<AAIController>(GetOwner()))
     {
-       SurvivorPawn = Cast<ASurvivorPawn>(AIController->GetPawn());
+        SurvivorPawn = Cast<ASurvivorPawn>(AIController->GetPawn());
+    }
+    
+    TArray<AActor*> FoundHouses;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AHouse::StaticClass(), FoundHouses);
+    for (AActor* ActorHouse : FoundHouses)
+    {
+        if (AHouse* House = Cast<AHouse>(ActorHouse))
+        {
+            AllLevelHouses.Add(House);
+        }
+    }
+    
+    TArray<AActor*> FoundItems;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABaseItem::StaticClass(), FoundItems);
+    for (AActor* ActorItem : FoundItems)
+    {
+        if (ABaseItem* Item = Cast<ABaseItem>(ActorItem))
+        {
+            AllLevelItems.Add(Item);
+        }
     }
     
     ChangeState(UExploreState::StaticClass());
@@ -32,6 +57,178 @@ void USurvivorFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
     if (!SurvivorPawn) return;
+    
+    // Visualize debug
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (PC && PC->WasInputKeyJustPressed(EKeys::One))
+    {
+        bShowDebug = !bShowDebug; // Toggle
+    }
+
+    
+    if (bShowDebug && SurvivorPawn)
+    {
+        // Draw path
+        for (int i = CurrentPathIndex; i < CurrentPath.Num() - 1; ++i)
+        {
+            DrawDebugLine(GetWorld(), CurrentPath[i], CurrentPath[i+1], FColor::Green, false, -1.0f, 0, 2.0f);
+        }
+
+        // Draw vision cone
+        FVector PawnLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
+        FVector Forward = SurvivorPawn->GetActorForwardVector();
+        float VisionAngleWidth = FMath::DegreesToRadians(70.0f); 
+        float VisionAngleHeight = FMath::DegreesToRadians(5.0f); 
+        DrawDebugCone(GetWorld(), PawnLoc, Forward, 500.0f, VisionAngleWidth, VisionAngleHeight, 24, FColor::Yellow, false, -1.0f, 0, 1.5f);
+
+        // Draw house outline
+        for (AHouse* House : AllLevelHouses)
+        {
+            if (!IsValid(House)) continue;
+
+            FColor HouseColor = FColor::White; // Unknown
+
+            if (VisitedHouses.Contains(House)) 
+            {
+                HouseColor = FColor::Black; // Visited
+            }
+            else if (KnownHouses.Contains(House)) 
+            {
+                HouseColor = FColor::Blue; // Known
+            }
+            
+            FHouseBounds Bounds = House->GetBounds();
+            DrawDebugBox(GetWorld(), Bounds.Origin, Bounds.Extent, FQuat::Identity, HouseColor, false, -1.0f, 0, 8.0f);
+        }
+        
+        // Draw house outline & Spider Web
+        for (AHouse* House : AllLevelHouses)
+        {
+            if (!IsValid(House)) continue;
+
+            FColor HouseColor = FColor::White; // Unknown
+            bool bIsTracked = false;
+            FString HouseTag = TEXT("");
+
+            if (VisitedHouses.Contains(House)) 
+            {
+                HouseColor = FColor::Black; // Visited
+                bIsTracked = true;
+                HouseTag = TEXT("Visited");
+            }
+            else if (KnownHouses.Contains(House)) 
+            {
+                HouseColor = FColor::Blue; // Known
+                bIsTracked = true;
+                HouseTag = TEXT("Known");
+            }
+            
+            FHouseBounds Bounds = House->GetBounds();
+            DrawDebugBox(GetWorld(), Bounds.Origin, Bounds.Extent, FQuat::Identity, HouseColor, false, -1.0f, 0, 8.0f);
+            
+            if (bIsTracked)
+            {
+                // Get id assigned when see
+                int32 HouseID = DiscoveredHouseIDs.Contains(House) ? DiscoveredHouseIDs[House] : 0;
+                
+                // Draw name
+                FVector TextLoc = House->GetActorLocation() + FVector(0.0f, 0.0f, 400.0f);
+                FString HouseName = FString::Printf(TEXT("%s House %d"), *HouseTag, HouseID);
+                DrawDebugString(GetWorld(), TextLoc, HouseName, nullptr, HouseColor, 0.0f, true, 1.5f);
+
+                // Draw line
+                DrawDebugLine(GetWorld(), PawnLoc, House->GetActorLocation(), HouseColor, false, -1.0f, 0, 1.5f);
+
+                // Draw distance
+                FVector Midpoint = PawnLoc + ((House->GetActorLocation() - PawnLoc) * 0.5f);
+                float Dist = FVector::Distance(PawnLoc, House->GetActorLocation());
+                FString DistText = FString::Printf(TEXT("%.0f"), Dist);
+                DrawDebugString(GetWorld(), Midpoint, DistText, nullptr, HouseColor, 0.0f, true, 1.0f);
+            }
+        }
+
+        // Draw zombie outline
+        for (AActor* Zombie : KnownZombies) 
+        {
+            if (!IsValid(Zombie)) continue;
+
+            FColor ZombieColor = FColor::Yellow; // Known by player
+
+            if (Zombie == CurrentThreat) 
+            {
+                ZombieColor = FColor::Red; // Targeted with weapon
+                
+                // Draw a laser
+                DrawDebugLine(GetWorld(), PawnLoc, Zombie->GetActorLocation(), FColor::Red, false, -1.0f, 0, 2.0f);
+            }
+            
+            DrawDebugCapsule(GetWorld(), Zombie->GetActorLocation(), 90.0f, 40.0f, FQuat::Identity, ZombieColor, false, -1.0f, 0, 5.0f);
+        }
+        
+        // Draw item outline
+        TArray<AActor*> DynamicFoundItems;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABaseItem::StaticClass(), DynamicFoundItems);
+
+        for (int32 i = DynamicFoundItems.Num() - 1; i >= 0; --i)
+        {
+            ABaseItem* Item = Cast<ABaseItem>(DynamicFoundItems[i]);
+            if (!Item) continue;
+
+            // Skip if it has an owner
+            if (Item->GetOwner() != nullptr) continue;
+            
+            // Skip our items in the pocket
+            UInventoryComponent* Inv = SurvivorPawn->GetComponentByClass<UInventoryComponent>();
+            if (Inv && Inv->GetInventory().Contains(Item)) continue;
+            
+            // Skip garbage 
+            if (Item->GetItemType() == EItemType::Garbage) continue; 
+
+            FColor ItemColor = FColor::White; // Unknown item
+            bool bIsKnown = KnownItems.Contains(Item);
+
+            if (bIsKnown)
+            {
+                ItemColor = FColor::Cyan; // Known item
+                
+                DrawDebugLine(GetWorld(), PawnLoc, Item->GetActorLocation(), FColor::Cyan, false, -1.0f, 0, 1.0f);
+                
+                FString ItemName = TEXT("Item");
+                switch (Item->GetItemType())
+                {
+                case EItemType::Pistol:   ItemName = TEXT("Pistol"); break;
+                case EItemType::Shotgun:  ItemName = TEXT("Shotgun"); break;
+                case EItemType::Medkit:   ItemName = TEXT("Medkit"); break;
+                case EItemType::Food:     ItemName = TEXT("Food"); break;
+                }
+                
+                FVector TextLoc = Item->GetActorLocation() + FVector(0.0f, 0.0f, 40.0f);
+                DrawDebugString(GetWorld(), TextLoc, ItemName, nullptr, FColor::Cyan, 0.0f, true, 1.0f);
+            }
+            
+            DrawDebugBox(GetWorld(), Item->GetActorLocation(), FVector(15.0f, 15.0f, 15.0f), FQuat::Identity, ItemColor, false, -1.0f, 0, 3.0f);
+        }
+
+        // Information
+        FVector HeadLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 150.0f);
+        
+        UHealthComponent* HC = SurvivorPawn->GetComponentByClass<UHealthComponent>();
+        UStaminaComponent* SC = SurvivorPawn->GetComponentByClass<UStaminaComponent>();
+        
+        FString DebugText;
+        if (CurrentState)
+        {
+            FString StateName = CurrentState->GetClass()->GetName();
+            StateName.RemoveFromStart("U"); 
+            DebugText += FString::Printf(TEXT("\nSTATE: %s"), *StateName);
+            DebugText += FString::Printf(TEXT("\nWANDER TIMER: %.1f"), TimeSinceLastTown);
+        }
+
+        if (CurrentThreat) DebugText += TEXT("\nTargeting: ZOMBIE RUN");
+        if (ActivePurgeZone) DebugText += TEXT("\nTargeting: PURGE ZONE RUN");
+        
+        DrawDebugString(GetWorld(), HeadLoc, DebugText, nullptr, FColor::Cyan, 0.0f, true, 1.2f);
+    }
     
     UHealthComponent* HealthComp = SurvivorPawn->GetComponentByClass<UHealthComponent>();
     if (HealthComp)
@@ -47,20 +244,14 @@ void USurvivorFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
         // Track health
         if (CurrentHealth < LastKnownHealth)
         {
-            // Panic
-            if (!CurrentThreat && !ActivePurgeZone)
-            {
-                bIsReflexSpinning = true;
-                
-                ReflexTargetLocation = SurvivorPawn->GetActorLocation() - (SurvivorPawn->GetActorForwardVector() * 500.0f);
-                GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Something bit me! Whipping around!"));
-            }
+            OnDamageSensed(FVector::ZeroVector);
         }
         
         // Remember new health
         LastKnownHealth = CurrentHealth;
     }
     
+
     EvaluateInventory();
     
     if (bIsReflexSpinning && SurvivorPawn)
@@ -81,62 +272,34 @@ void USurvivorFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
         return;
     }
     
+    // Check if zombies are too close
+    if (CurrentState && (CurrentState->GetClass() == UExploreState::StaticClass() || 
+                         CurrentState->GetClass() == UReturnState::StaticClass() || 
+                         CurrentState->GetClass() == UScavengeState::StaticClass()))
+    {
+        for (AActor* Zombie : KnownZombies)
+        {
+            if (!IsValid(Zombie)) continue;
+            
+            float Dist = FVector::Distance(SurvivorPawn->GetActorLocation(), Zombie->GetActorLocation());
+            bool bIsHeavy = Zombie->GetClass()->GetName().Contains("Heavy");
+
+            // If zombie too close we react
+            if ((bIsHeavy && Dist < 250.0f) || (!bIsHeavy && Dist < 450.0f))
+            {
+                OnZombieSpotted(Zombie); 
+                break; 
+            }
+        }
+    }
+    
     if (CurrentState)
     {
         CurrentState->Update(DeltaTime);
     }
     
-    // Visualize debug
-    APlayerController* PC = GetWorld()->GetFirstPlayerController();
-    if (PC && PC->WasInputKeyJustPressed(EKeys::One))
-    {
-        bShowDebug = !bShowDebug; // Toggle
-    }
 
-    if (bShowDebug && SurvivorPawn)
-    {
-        // Draw path
-        for (int i = CurrentPathIndex; i < CurrentPath.Num() - 1; ++i)
-        {
-            DrawDebugLine(GetWorld(), CurrentPath[i], CurrentPath[i+1], FColor::Green, false, -1.0f, 0, 2.0f);
-        }
 
-        // Draw vision cone
-        FVector PawnLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
-        FVector Forward = SurvivorPawn->GetActorForwardVector();
-        float VisionAngleWidth = FMath::DegreesToRadians(70.0f); 
-        float VisionAngleHeight = FMath::DegreesToRadians(5.0f); 
-        DrawDebugCone(GetWorld(), PawnLoc, Forward, 1000.0f, VisionAngleWidth, VisionAngleHeight, 24, FColor::Yellow, false, -1.0f, 0, 1.5f);
-
-        // Draw memory radar
-        for (AActor* Zombie : KnownZombies) 
-        {
-            if (IsValid(Zombie)) DrawDebugLine(GetWorld(), PawnLoc, Zombie->GetActorLocation(), FColor::Red, false, -1.0f, 0, 1.0f);
-        }
-        for (AHouse* House : KnownHouses) 
-        {
-            if (IsValid(House)) DrawDebugLine(GetWorld(), PawnLoc, House->GetActorLocation(), FColor::Blue, false, -1.0f, 0, 1.0f);
-        }
-
-        // Information
-        FVector HeadLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 150.0f);
-        
-        UHealthComponent* HC = SurvivorPawn->GetComponentByClass<UHealthComponent>();
-        UStaminaComponent* SC = SurvivorPawn->GetComponentByClass<UStaminaComponent>();
-        
-        FString DebugText;
-        if (CurrentState)
-        {
-            FString StateName = CurrentState->GetClass()->GetName();
-            StateName.RemoveFromStart("U"); 
-            DebugText += FString::Printf(TEXT("\nSTATE: %s"), *StateName);
-        }
-
-        if (CurrentThreat) DebugText += TEXT("\nTargeting: ZOMBIE RUN");
-        if (ActivePurgeZone) DebugText += TEXT("\nTargeting: PURGE ZONE RUN");
-        
-        DrawDebugString(GetWorld(), HeadLoc, DebugText, nullptr, FColor::Cyan, 0.0f, true, 1.2f);
-    }
 }
 
 void USurvivorFSM::ChangeState(TSubclassOf<UBaseState> NewStateClass)
@@ -144,6 +307,14 @@ void USurvivorFSM::ChangeState(TSubclassOf<UBaseState> NewStateClass)
     if (CurrentState)
     {
         if (CurrentState->GetClass() == NewStateClass) return; 
+        
+        UClass* CurrentClass = CurrentState->GetClass();
+        if (CurrentClass != UFleeState::StaticClass() && 
+            CurrentClass != UCombatState::StaticClass() && 
+            CurrentClass != UHideState::StaticClass())
+        {
+            PreviousStateClass = CurrentClass;
+        }
         
         CurrentState->Exit();
     }
@@ -158,25 +329,88 @@ void USurvivorFSM::ChangeState(TSubclassOf<UBaseState> NewStateClass)
     }
 }
 
+void USurvivorFSM::ResumePreviousState()
+{
+    if (PreviousStateClass)
+    {
+        ChangeState(PreviousStateClass);
+    }
+    else
+    {
+        ChangeState(UExploreState::StaticClass());
+    }
+}
+
 void USurvivorFSM::MoveAlongPath(float DeltaTime)
 {
     if (!SurvivorPawn || CurrentPath.IsEmpty()) return;
 
     FVector PawnLocation = SurvivorPawn->GetActorLocation();
     
-    float WaypointTolerance = 75.0f; 
+    // Detect when the agent becomes stuck
+    float Speed = FVector::Distance(PawnLocation, LastFrameLocation) / DeltaTime;
+    LastFrameLocation = PawnLocation;
 
-    while (CurrentPathIndex < CurrentPath.Num() - 1 && FVector::Distance(PawnLocation, CurrentPath[CurrentPathIndex]) < WaypointTolerance)
+    // If movement is extremely slow, start stuck recovery
+    if (Speed < 15.0f)
+    {
+        StuckTimer += DeltaTime;
+    
+        // Fully abandon the path if stuck too long
+        if (StuckTimer > 1.2f)
+        {
+            CurrentPath.Empty();
+            StuckTimer = 0.0f;
+
+            GEngine->AddOnScreenDebugMessage(
+                -1,
+                3.f,
+                FColor::Red,
+                TEXT("Corner locked! Nuking path to recalculate.")
+            );
+
+            return;
+        }
+        // Skip a waypoint if lightly snagged
+        else if (StuckTimer > 0.4f)
+        {
+            if (CurrentPathIndex < CurrentPath.Num() - 1)
+            {
+                CurrentPathIndex++;
+
+                GEngine->AddOnScreenDebugMessage(
+                    -1,
+                    1.f,
+                    FColor::Orange,
+                    TEXT("Snagged! Skipping node.")
+                );
+            }
+        }
+    }
+    else
+    {
+        // Gradually clear stuck state while moving
+        StuckTimer = FMath::FInterpTo(StuckTimer, 0.0f, DeltaTime, 2.0f);
+    }
+
+    // Stop if path is finished or was cleared
+    if (CurrentPathIndex >= CurrentPath.Num()) return;
+
+    // Advance waypoints early for smoother turns
+    float WaypointTolerance = 120.0f;
+
+    while (CurrentPathIndex < CurrentPath.Num() - 1 &&
+           FVector::Distance(PawnLocation, CurrentPath[CurrentPathIndex]) < WaypointTolerance)
     {
         CurrentPathIndex++;
     }
 
-    // Stop if path finished
+    // Stop if path became complete
     if (CurrentPathIndex >= CurrentPath.Num()) return;
 
     FVector TargetPoint = CurrentPath[CurrentPathIndex];
 
-    // Direction towards waypoint
+    // Direction towards current waypoint
     FVector SeekForce = (TargetPoint - PawnLocation).GetSafeNormal();
     SeekForce.Z = 0.0f;
 
@@ -197,23 +431,37 @@ void USurvivorFSM::MoveAlongPath(float DeltaTime)
     for (AActor* Zombie : KnownZombies)
     {
         float DistToZombie = FVector::Distance(PawnLocation, Zombie->GetActorLocation());
-        
-        // Avoid zombies within this radius
-        float AvoidanceRadius = 400.0f; 
+        float AvoidanceRadius = 1000.0f; 
 
         if (DistToZombie < AvoidanceRadius)
         {
-            FVector PushAway = (PawnLocation - Zombie->GetActorLocation()).GetSafeNormal();
+            // Direction away from zombie
+            FVector DirToZombie = (Zombie->GetActorLocation() - PawnLocation).GetSafeNormal();
+            FVector PushAway = -DirToZombie;
 
-            // Push when closer to zombie
-            PushAway *= (AvoidanceRadius - DistToZombie) / AvoidanceRadius; 
+            // Sideways vector to steer around zombie
+            FVector Tangent = FVector::CrossProduct(DirToZombie, FVector::UpVector);
 
-            SeparationForce += PushAway;
+            // Pick side works best for destination
+            if (FVector::DotProduct(Tangent, SeekForce) < 0)
+            {
+                Tangent = -Tangent; 
+            }
+
+            // Blend avoidance and sidestepping
+            FVector CurveVector = (PushAway * 0.4f) + (Tangent * 0.6f);
+            CurveVector.Normalize();
+
+            // Stronger avoidance when closer to zombie
+            float PushFactor = (AvoidanceRadius - DistToZombie) / AvoidanceRadius; 
+            CurveVector *= (PushFactor * PushFactor); 
+
+            SeparationForce += CurveVector;
             AvoidCount++;
         }
     }
 
-    // Average all avoidance forces
+    // Average avoidance forces
     if (AvoidCount > 0)
     {
         SeparationForce /= AvoidCount;
@@ -221,14 +469,44 @@ void USurvivorFSM::MoveAlongPath(float DeltaTime)
 
     SeparationForce.Z = 0.0f;
 
-    // Blend movement forces
+    // Blend path 
     float SeekWeight = 1.0f;
-    float SeparationWeight = 2.0f; 
+    float SeparationWeight = 3.5f; 
 
     FVector DesiredDirection = (SeekForce * SeekWeight) + (SeparationForce * SeparationWeight);
 
     DesiredDirection.Z = 0.0f;
-    DesiredDirection.Normalize(); 
+    DesiredDirection.Normalize();
+    
+    // Smooth movement direction over time
+    CurrentVelocity = FMath::VInterpTo(CurrentVelocity, DesiredDirection, DeltaTime, 6.0f);
+
+    // Apply movement
+    SurvivorPawn->AddMovementInput(CurrentVelocity, 1.0f);
+
+    // Rotate towards movement direction
+    if (!CurrentVelocity.IsNearlyZero(0.1f))
+    {
+        FRotator TargetRot = CurrentVelocity.Rotation();
+       
+        FRotator SmoothRot = FMath::RInterpTo(
+            SurvivorPawn->GetActorRotation(),
+            TargetRot,
+            DeltaTime,
+            10.0f
+        );
+
+        SurvivorPawn->SetActorRotation(SmoothRot);
+    }
+
+    // Use smaller tolerance for final waypoint
+    float ArrivalTolerance = (CurrentPathIndex == CurrentPath.Num() - 1) ? 50.0f : 100.0f;
+
+    // Advance to next waypoint
+    if (FVector::Distance(PawnLocation, TargetPoint) < ArrivalTolerance)
+    {
+        CurrentPathIndex++; 
+    }
 
     // Apply movement input
     SurvivorPawn->AddMovementInput(DesiredDirection, 1.0f);
@@ -252,10 +530,7 @@ void USurvivorFSM::MoveAlongPath(float DeltaTime)
 
        SurvivorPawn->SetActorRotation(SmoothRot);
     }
-
-    // Smaller tolerance for final waypoint
-    float ArrivalTolerance = (CurrentPathIndex == CurrentPath.Num() - 1) ? 50.0f : 100.0f;
-
+    
     // Advance to next waypoint
     if (FVector::Distance(PawnLocation, TargetPoint) < ArrivalTolerance)
     {
@@ -337,16 +612,38 @@ bool USurvivorFSM::GetBestWeapon(float TargetDistance, int& OutSlotIndex)
 
 void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
 {
+    if (ActivePurgeZone) return;
+    
     // Zombie is far
     float DistToZombie = FVector::Distance(SurvivorPawn->GetActorLocation(), Zombie->GetActorLocation());
-    if (DistToZombie > 700.0f)
-    {
-        return; 
-    }
+    bool bIsHeavy = Zombie->GetClass()->GetName().Contains("Heavy");
+    
+    if (bIsHeavy && DistToZombie > 250.0f) return;
+    if (!bIsHeavy && DistToZombie > 450.0f) return;
     
     CurrentThreat = Zombie;
 
     int WeaponSlot = -1;
+    
+    // Try to find a gun close enough to get 
+    if (!HasUsableWeapon(WeaponSlot))
+    {
+        AActor* BestGun = GetClosestKnownItem(EItemType::Shotgun);
+        if (!BestGun) BestGun = GetClosestKnownItem(EItemType::Pistol);
+        
+        if (BestGun)
+        {
+            float DistToGun = FVector::Distance(SurvivorPawn->GetActorLocation(), BestGun->GetActorLocation());
+            if (DistToGun < 800.0f) 
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Saw a gun! Diving for it!"));
+                TargetItem = Cast<ABaseItem>(BestGun);
+                ChangeState(UScavengeState::StaticClass());
+                return;
+            }
+        }
+    }
+    
     UHealthComponent* HealthComp = SurvivorPawn->GetComponentByClass<UHealthComponent>();
     float HealthPct = HealthComp ? (float)HealthComp->GetHealth() / (float)HealthComp->GetMaxHealth() : 1.0f;
 
@@ -361,12 +658,9 @@ void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
         }
     }
     
-    // Keep distance from heavy
-    bool bIsHeavy = Zombie->GetClass()->GetName().Contains("Heavy");
-    
-    if (bIsHeavy && DistToZombie > 300.0f)
+    // Safe ammo bc big boy
+    if (bIsHeavy)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Just a Heavy. Saving ammo and walking away!"));
         ChangeState(UFleeState::StaticClass());
         return;
     }
@@ -377,7 +671,7 @@ void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
         ChangeState(UCombatState::StaticClass());
     }
     // Hide in house
-    else if (bHasValidHouse)
+    else if (bHasValidHouse && DistToZombie > 1000.0f)
     {
         ChangeState(UHideState::StaticClass());
     }
@@ -445,12 +739,19 @@ void USurvivorFSM::EvaluateInventory()
 
 void USurvivorFSM::OnDamageSensed(FVector DamageLocation)
 {
-    if (CurrentThreat || ActivePurgeZone) return;
-
-    // We got hit
     bIsReflexSpinning = true;
-    ReflexTargetLocation = SurvivorPawn->GetActorLocation() - (SurvivorPawn->GetActorForwardVector() * 500.0f);
-    GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Who hit me?!"));
+    
+    // Check where the damage comes from
+    if (!DamageLocation.IsNearlyZero())
+    {
+        ReflexTargetLocation = DamageLocation;
+    }
+    else
+    {
+        ReflexTargetLocation = SurvivorPawn->GetActorLocation() - (SurvivorPawn->GetActorForwardVector() * 500.0f);
+    }
+    
+    GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Ouch! Whipping around to attacker!"));
 }
 
 AActor* USurvivorFSM::GetClosestKnownItem(EItemType DesiredType)

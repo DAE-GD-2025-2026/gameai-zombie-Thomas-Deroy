@@ -20,6 +20,7 @@ public:
 
 	void OnZombieSpotted(AActor* Zombie);
 	void ChangeState(TSubclassOf<UBaseState> NewStateClass);
+	void ResumePreviousState();
 	void MoveAlongPath(float DeltaTime);
 	
 	UPROPERTY()
@@ -71,7 +72,27 @@ public:
 	FVector ReflexTargetLocation;
 	
 	UPROPERTY()
+	float TimeSinceLastTown{0.0f};
+	
+	UPROPERTY()
+	TSubclassOf<UBaseState> PreviousStateClass;
+	
+	UPROPERTY()
+	FVector LastFrameLocation{FVector::ZeroVector};
+    
+	UPROPERTY()
+	float StuckTimer{0.0f};
+	
+	// Debug
+	UPROPERTY()
 	bool bShowDebug{true};
+	UPROPERTY()
+	TArray<AHouse*> AllLevelHouses;
+	UPROPERTY()
+	TMap<AHouse*, int32> DiscoveredHouseIDs;
+	int32 TotalHousesDiscovered{0};
+	UPROPERTY()
+	TArray<AActor*> AllLevelItems;
 	
 protected:
 	virtual void BeginPlay() override;

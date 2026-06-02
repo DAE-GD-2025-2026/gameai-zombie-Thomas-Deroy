@@ -47,7 +47,7 @@ void UHideState::Enter(USurvivorFSM* FSM)
     else
     {
         // No house
-        ContextFSM->ChangeState(UExploreState::StaticClass());
+        ContextFSM->ResumePreviousState();
     }
 }
 
@@ -62,7 +62,7 @@ void UHideState::Update(float DeltaTime)
     {
         float ThreatDist = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->CurrentThreat->GetActorLocation());
 
-        if (ThreatDist < 500.0f) // Zombie is inside house
+        if (ThreatDist < 800.0f) // Zombie is inside house
         {
             GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("You're cooked!"));
             
@@ -91,7 +91,7 @@ void UHideState::Update(float DeltaTime)
         if (ThreatDist > 1800.0f)
         {
             ContextFSM->CurrentThreat = nullptr;
-            ContextFSM->ChangeState(UExploreState::StaticClass());
+            ContextFSM->ResumePreviousState();
 
             return;
         }
@@ -100,7 +100,7 @@ void UHideState::Update(float DeltaTime)
     {
         // Return explore state when safe
         ContextFSM->CurrentThreat = nullptr;
-        ContextFSM->ChangeState(UExploreState::StaticClass());
+        ContextFSM->ResumePreviousState();
 
         return;
     }
