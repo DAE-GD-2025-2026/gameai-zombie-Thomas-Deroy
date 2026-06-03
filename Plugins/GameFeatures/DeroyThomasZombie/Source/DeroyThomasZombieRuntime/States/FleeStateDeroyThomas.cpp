@@ -48,6 +48,8 @@ void UFleeStateDeroyThomas::Update(float DeltaTime)
     // Look back
     if (HandleShoulderCheck(DeltaTime, PawnLoc, ThreatToEvade, LastKnownThreatLoc)) return;
 
+    if (!ContextFSM) return;
+    
     // No threat anymore
     if (!ThreatToEvade)
     {
@@ -61,6 +63,9 @@ void UFleeStateDeroyThomas::Update(float DeltaTime)
     bool bIsPurge = (ThreatToEvade == ContextFSM->ActivePurgeZone);
 
     UpdateSafetyAndStamina(DistToThreat, bIsPurge);
+    
+    if (!ContextFSM) return;
+    
     if (bIsCheckingBehind) return;
 
     // Move away
@@ -78,7 +83,7 @@ void UFleeStateDeroyThomas::Exit()
 {
     Super::Exit();
 
-    // cleanup flee state
+    // Cleanup flee state
     if (ContextFSM && ContextFSM->SurvivorPawn)
     {
         ContextFSM->SurvivorPawn->StopRunning();
