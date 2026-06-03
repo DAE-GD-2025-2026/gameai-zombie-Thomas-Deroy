@@ -436,31 +436,30 @@ void USurvivorFSM::MoveAlongPath(float DeltaTime)
 
     // Apply movement
     SurvivorPawn->AddMovementInput(CurrentVelocity, 1.0f);
-
+    
     // Rotate towards movement direction
     if (!CurrentVelocity.IsNearlyZero(0.1f))
     {
-        FRotator TargetRot = CurrentVelocity.Rotation();
+        float DirectionDot = FVector::DotProduct(SurvivorPawn->GetActorForwardVector(), CurrentVelocity);
        
-        FRotator SmoothRot = FMath::RInterpTo(
-            SurvivorPawn->GetActorRotation(),
-            TargetRot,
-            DeltaTime,
-            10.0f
-        );
+        // Rotate faster during sharp turns
+        float DynamicRotSpeed = FMath::GetMappedRangeValueClamped(FVector2D(1.0f, -1.0f), FVector2D(15.0f, 45.0f), DirectionDot);
+       
+        FRotator TargetRot = CurrentVelocity.Rotation();
+
+        FRotator SmoothRot = FMath::RInterpTo(SurvivorPawn->GetActorRotation(), TargetRot, DeltaTime, DynamicRotSpeed);
 
         SurvivorPawn->SetActorRotation(SmoothRot);
     }
 
     // Use smaller tolerance for final waypoint
     float ArrivalTolerance = (CurrentPathIndex == CurrentPath.Num() - 1) ? 50.0f : 100.0f;
-
+    
     // Advance to next waypoint
     if (FVector::Distance(PawnLocation, TargetPoint) < ArrivalTolerance)
     {
         CurrentPathIndex++; 
     }
-
     // Apply movement input
     SurvivorPawn->AddMovementInput(DesiredDirection, 1.0f);
 
