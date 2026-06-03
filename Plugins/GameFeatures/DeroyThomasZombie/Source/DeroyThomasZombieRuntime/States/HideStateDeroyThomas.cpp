@@ -1,13 +1,13 @@
-﻿#include "HideState.h"
-#include "../SurvivorFSM.h"
-#include "ExploreState.h"
+﻿#include "HideStateDeroyThomas.h"
+#include "../SurvivorFSMDeroyThomas.h"
+#include "ExploreStateDeroyThomas.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Village/House/House.h"
-#include "FleeState.h" 
-#include "CombatState.h"
+#include "FleeStateDeroyThomas.h" 
+#include "CombatStateDeroyThomas.h"
 #include "Common/HealthComponent.h"
 
-void UHideState::Enter(USurvivorFSM* FSM)
+void UHideStateDeroyThomas::Enter(USurvivorFSMDeroyThomas* FSM)
 {
     Super::Enter(FSM);
 
@@ -21,7 +21,7 @@ void UHideState::Enter(USurvivorFSM* FSM)
     PathToClosestAvailableHouse();
 }
 
-void UHideState::Update(float DeltaTime)
+void UHideStateDeroyThomas::Update(float DeltaTime)
 {
     Super::Update(DeltaTime);
 
@@ -37,7 +37,7 @@ void UHideState::Update(float DeltaTime)
     }
 }
 
-void UHideState::PathToClosestAvailableHouse()
+void UHideStateDeroyThomas::PathToClosestAvailableHouse()
 {
     AHouse* ClosestHouse = nullptr;
     float ClosestDist = FLT_MAX;
@@ -79,7 +79,7 @@ void UHideState::PathToClosestAvailableHouse()
     }
 }
 
-void UHideState::EvaluateThreatDistance()
+void UHideStateDeroyThomas::EvaluateThreatDistance()
 {
     if (!IsValid(ContextFSM->CurrentThreat))
     {
@@ -108,12 +108,12 @@ void UHideState::EvaluateThreatDistance()
 
         if (ContextFSM->HasUsableWeapon(WeaponSlot) && HealthPct > 0.4f)
         {
-            ContextFSM->ChangeState(UCombatState::StaticClass());
+            ContextFSM->ChangeState(UCombatStateDeroyThomas::StaticClass());
         }
         else
         {
             ContextFSM->TargetHouse = nullptr; 
-            ContextFSM->ChangeState(UFleeState::StaticClass());
+            ContextFSM->ChangeState(UFleeStateDeroyThomas::StaticClass());
         }
     }
     // Safe again -> return to previous behavior

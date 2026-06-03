@@ -1,14 +1,14 @@
-﻿#include "ExploreState.h"
-#include "ReturnState.h"
-#include "ScavengeState.h"
-#include "../SurvivorFSM.h"
+﻿#include "ExploreStateDeroyThomas.h"
+#include "ReturnStateDeroyThomas.h"
+#include "ScavengeStateDeroyThomas.h"
+#include "../SurvivorFSMDeroyThomas.h"
 #include "Common/InventoryComponent.h"
 #include "Common/HealthComponent.h"
 #include "Common/StaminaComponent.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Village/House/House.h"
 
-void UExploreState::Enter(USurvivorFSM* FSM)
+void UExploreStateDeroyThomas::Enter(USurvivorFSMDeroyThomas* FSM)
 {
 	Super::Enter(FSM);
 
@@ -22,7 +22,7 @@ void UExploreState::Enter(USurvivorFSM* FSM)
 	GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan, TEXT("State Changed To: Explore"));
 }
 
-void UExploreState::Update(float DeltaTime)
+void UExploreStateDeroyThomas::Update(float DeltaTime)
 {
     Super::Update(DeltaTime);
     if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
@@ -52,14 +52,14 @@ void UExploreState::Update(float DeltaTime)
     HandleParanoia(DeltaTime);
 }
 
-void UExploreState::Exit()
+void UExploreStateDeroyThomas::Exit()
 {
 	Super::Exit();
 
     if (ContextFSM) ContextFSM->CurrentPath.Empty();
 }
 
-bool UExploreState::HandleStartSpin(float DeltaTime)
+bool UExploreStateDeroyThomas::HandleStartSpin(float DeltaTime)
 {
     if (!ContextFSM->bHasDoneStartSpin)
     {
@@ -79,7 +79,7 @@ bool UExploreState::HandleStartSpin(float DeltaTime)
     return false;
 }
 
-bool UExploreState::CheckSuppliesAndReturn(float DeltaTime)
+bool UExploreStateDeroyThomas::CheckSuppliesAndReturn(float DeltaTime)
 {
     UInventoryComponent* Inventory = ContextFSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
     int EmptySlots = 0;
@@ -97,7 +97,7 @@ bool UExploreState::CheckSuppliesAndReturn(float DeltaTime)
 
         if (EmptySlots >= 3 && ContextFSM->TimeSinceLastTown > 10.0f)
         {
-            ContextFSM->ChangeState(UReturnState::StaticClass());
+            ContextFSM->ChangeState(UReturnStateDeroyThomas::StaticClass());
             return true;
         }
 
@@ -108,7 +108,7 @@ bool UExploreState::CheckSuppliesAndReturn(float DeltaTime)
             ContextFSM->TimeSinceLastTown = 0.0f;
 
             GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("Wandered enough. Checking old houses!"));
-            ContextFSM->ChangeState(UReturnState::StaticClass());
+            ContextFSM->ChangeState(UReturnStateDeroyThomas::StaticClass());
             return true;
         }
     }
@@ -120,7 +120,7 @@ bool UExploreState::CheckSuppliesAndReturn(float DeltaTime)
     return false;
 }
 
-bool UExploreState::HandleHouseSearching()
+bool UExploreStateDeroyThomas::HandleHouseSearching()
 {
     if (ContextFSM->TargetHouse)
     {
@@ -166,7 +166,7 @@ bool UExploreState::HandleHouseSearching()
     return false;
 }
 
-bool UExploreState::CheckDesperationMemory()
+bool UExploreStateDeroyThomas::CheckDesperationMemory()
 {
     // Low health/stamina -> search for needed items
     UHealthComponent* HealthComp = ContextFSM->SurvivorPawn->GetComponentByClass<UHealthComponent>();
@@ -196,7 +196,7 @@ bool UExploreState::CheckDesperationMemory()
         {
             GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Desperation: Fetching Medkit!"));
             ContextFSM->TargetItem = Cast<ABaseItem>(Medkit);
-            ContextFSM->ChangeState(UScavengeState::StaticClass());
+            ContextFSM->ChangeState(UScavengeStateDeroyThomas::StaticClass());
             return true;
         }
     }
@@ -207,7 +207,7 @@ bool UExploreState::CheckDesperationMemory()
         {
             GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Desperation: Fetching Food!"));
             ContextFSM->TargetItem = Cast<ABaseItem>(Food);
-            ContextFSM->ChangeState(UScavengeState::StaticClass());
+            ContextFSM->ChangeState(UScavengeStateDeroyThomas::StaticClass());
             return true;
         }
     }
@@ -215,7 +215,7 @@ bool UExploreState::CheckDesperationMemory()
     return false;
 }
 
-void UExploreState::GenerateExplorationPath()
+void UExploreStateDeroyThomas::GenerateExplorationPath()
 {
     // Go to current target house if set
     if (ContextFSM->TargetHouse)
@@ -225,6 +225,7 @@ void UExploreState::GenerateExplorationPath()
         ContextFSM->CurrentPathIndex = 0;
 
         if (!ContextFSM->CurrentPath.IsEmpty()) return;
+        else { ContextFSM->TargetHouse = nullptr; }
         
         ContextFSM->TargetHouse = nullptr;
     }
@@ -237,13 +238,12 @@ void UExploreState::GenerateExplorationPath()
 
         SearchWaypoints = 2;
 
-        ContextFSM->CurrentPath =
-            ContextFSM->SurvivorPawn->CalculatePath(ContextFSM->TargetHouse->GetBounds().Origin);
+        ContextFSM->CurrentPath = ContextFSM->SurvivorPawn->CalculatePath(ContextFSM->TargetHouse->GetBounds().Origin);
 
         ContextFSM->CurrentPathIndex = 0;
 
-        if (!ContextFSM->CurrentPath.IsEmpty())
-            return;
+        if (!ContextFSM->CurrentPath.IsEmpty()) return;
+        else { ContextFSM->TargetHouse = nullptr; }
 
         ContextFSM->VisitedHouses.AddUnique(ContextFSM->TargetHouse);
         ContextFSM->KnownHouses.Remove(ContextFSM->TargetHouse);
@@ -266,7 +266,7 @@ void UExploreState::GenerateExplorationPath()
     ContextFSM->CurrentPathIndex = 0;
 }
 
-void UExploreState::HandleParanoia(float DeltaTime)
+void UExploreStateDeroyThomas::HandleParanoia(float DeltaTime)
 {
     if (bIsParanoiaChecking)
     {

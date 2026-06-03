@@ -1,13 +1,13 @@
-﻿#include "ScavengeState.h"
-#include "../SurvivorFSM.h"
-#include "ExploreState.h"
+﻿#include "ScavengeStateDeroyThomas.h"
+#include "../SurvivorFSMDeroyThomas.h"
+#include "ExploreStateDeroyThomas.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Common/InventoryComponent.h"
 #include "Common/HealthComponent.h"
 #include "Common/StaminaComponent.h"
 #include "Items/BaseItem.h"
 
-void UScavengeState::Enter(USurvivorFSM* FSM)
+void UScavengeStateDeroyThomas::Enter(USurvivorFSMDeroyThomas* FSM)
 {
     Super::Enter(FSM);
 
@@ -24,7 +24,7 @@ void UScavengeState::Enter(USurvivorFSM* FSM)
     }
 }
 
-void UScavengeState::Update(float DeltaTime)
+void UScavengeStateDeroyThomas::Update(float DeltaTime)
 {
     Super::Update(DeltaTime);
     
@@ -73,7 +73,7 @@ void UScavengeState::Update(float DeltaTime)
     }
 }
 
-void UScavengeState::Exit()
+void UScavengeStateDeroyThomas::Exit()
 {
     Super::Exit();
 
@@ -84,7 +84,7 @@ void UScavengeState::Exit()
     }
 }
 
-bool UScavengeState::TryGrabItem()
+bool UScavengeStateDeroyThomas::TryGrabItem()
 {
     // Try all inventory slots
     for (int i = 0; i < Inventory->GetInventoryCapacity(); ++i)
@@ -107,7 +107,7 @@ bool UScavengeState::TryGrabItem()
     return false;
 }
 
-void UScavengeState::HandleFullInventory()
+void UScavengeStateDeroyThomas::HandleFullInventory()
 {
     bool bSwapped = false;
 
@@ -156,7 +156,7 @@ void UScavengeState::HandleFullInventory()
     ContextFSM->ResumePreviousState();
 }
 
-bool UScavengeState::FindNextKnownItem()
+bool UScavengeStateDeroyThomas::FindNextKnownItem()
 {
     // No space left
     if (!Inventory->GetInventory().Contains(nullptr)) return false;

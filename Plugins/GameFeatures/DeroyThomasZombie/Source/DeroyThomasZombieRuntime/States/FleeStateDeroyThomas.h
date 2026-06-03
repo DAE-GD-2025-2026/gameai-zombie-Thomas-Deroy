@@ -1,16 +1,16 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
-#include "BaseState.h"
-#include "FleeState.generated.h"
+#include "BaseStateDeroyThomas.h"
+#include "FleeStateDeroyThomas.generated.h"
 
 UCLASS()
-class DEROYTHOMASZOMBIERUNTIME_API UFleeState : public UBaseState
+class DEROYTHOMASZOMBIERUNTIME_API UFleeStateDeroyThomas : public UBaseStateDeroyThomas
 {
 	GENERATED_BODY()
 
 public:
-	virtual void Enter(USurvivorFSM* FSM) override;
+	virtual void Enter(USurvivorFSMDeroyThomas* FSM) override;
 	virtual void Update(float DeltaTime) override;
 	virtual void Exit() override;
 	

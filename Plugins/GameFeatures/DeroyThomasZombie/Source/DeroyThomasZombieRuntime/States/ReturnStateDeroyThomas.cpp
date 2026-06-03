@@ -1,13 +1,13 @@
-﻿#include "ReturnState.h"
+﻿#include "ReturnStateDeroyThomas.h"
 
-#include "ExploreState.h"
-#include "../SurvivorFSM.h"
-#include "ScavengeState.h"
+#include "ExploreStateDeroyThomas.h"
+#include "../SurvivorFSMDeroyThomas.h"
+#include "ScavengeStateDeroyThomas.h"
 #include "Common/InventoryComponent.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Village/House/House.h"
 
-void UReturnState::Enter(USurvivorFSM* FSM)
+void UReturnStateDeroyThomas::Enter(USurvivorFSMDeroyThomas* FSM)
 {
     Super::Enter(FSM);
 
@@ -24,7 +24,7 @@ void UReturnState::Enter(USurvivorFSM* FSM)
     PathToClosestVisitedHouse();
 }
 
-void UReturnState::Update(float DeltaTime)
+void UReturnStateDeroyThomas::Update(float DeltaTime)
 {
     Super::Update(DeltaTime);
 
@@ -41,7 +41,7 @@ void UReturnState::Update(float DeltaTime)
     }
 }
 
-bool UReturnState::TryScavengeKnownItems()
+bool UReturnStateDeroyThomas::TryScavengeKnownItems()
 {
     UInventoryComponent* Inventory = ContextFSM->SurvivorPawn->GetComponentByClass<UInventoryComponent>();
 
@@ -89,7 +89,7 @@ bool UReturnState::TryScavengeKnownItems()
         {
             ContextFSM->TargetItem = Cast<ABaseItem>(BestItem);
 
-            ContextFSM->ChangeState(UScavengeState::StaticClass());
+            ContextFSM->ChangeState(UScavengeStateDeroyThomas::StaticClass());
 
             return true;
         }
@@ -98,7 +98,7 @@ bool UReturnState::TryScavengeKnownItems()
     return false;
 }
 
-void UReturnState::PathToClosestVisitedHouse()
+void UReturnStateDeroyThomas::PathToClosestVisitedHouse()
 {
     AHouse* ClosestHouse = nullptr;
     float ClosestDist = FLT_MAX;
@@ -137,17 +137,17 @@ void UReturnState::PathToClosestVisitedHouse()
 
             ContextFSM->TargetHouse = nullptr;
 
-            ContextFSM->ChangeState(UExploreState::StaticClass());
+            ContextFSM->ChangeState(UExploreStateDeroyThomas::StaticClass());
         }
     }
     else
     {
         // No known houses -> just explore
-        ContextFSM->ChangeState(UExploreState::StaticClass());
+        ContextFSM->ChangeState(UExploreStateDeroyThomas::StaticClass());
     }
 }
 
-void UReturnState::ResetLocalTownCluster()
+void UReturnStateDeroyThomas::ResetLocalTownCluster()
 {
     TArray<AHouse*> LocalTownHouses;
 

@@ -1,12 +1,12 @@
-﻿#include "CombatState.h"
-#include "../SurvivorFSM.h"
-#include "ExploreState.h"
-#include "FleeState.h"
+﻿#include "CombatStateDeroyThomas.h"
+#include "../SurvivorFSMDeroyThomas.h"
+#include "ExploreStateDeroyThomas.h"
+#include "FleeStateDeroyThomas.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Common/InventoryComponent.h"
 #include "Items/BaseItem.h"
 
-void UCombatState::Enter(USurvivorFSM* FSM)
+void UCombatStateDeroyThomas::Enter(USurvivorFSMDeroyThomas* FSM)
 {
     Super::Enter(FSM);
 
@@ -20,7 +20,7 @@ void UCombatState::Enter(USurvivorFSM* FSM)
     }
 }
 
-void UCombatState::Update(float DeltaTime)
+void UCombatStateDeroyThomas::Update(float DeltaTime)
 {
     Super::Update(DeltaTime);
 
@@ -29,7 +29,7 @@ void UCombatState::Update(float DeltaTime)
     // If purge zone then flee
     if (ContextFSM->ActivePurgeZone)
     {
-        ContextFSM->ChangeState(UFleeState::StaticClass());
+        ContextFSM->ChangeState(UFleeStateDeroyThomas::StaticClass());
         return;
     }
 
@@ -54,7 +54,7 @@ void UCombatState::Update(float DeltaTime)
     }
 }
 
-void UCombatState::HandleAimingAndMovement(float DeltaTime, FVector ThreatDir)
+void UCombatStateDeroyThomas::HandleAimingAndMovement(float DeltaTime, FVector ThreatDir)
 {
     // Rotate toward target
     FRotator TargetRot = ThreatDir.Rotation();
@@ -72,7 +72,7 @@ void UCombatState::HandleAimingAndMovement(float DeltaTime, FVector ThreatDir)
     ContextFSM->SurvivorPawn->AddMovementInput(-ThreatDir, 0.5f);
 }
 
-void UCombatState::HandleShooting(FVector ThreatDir)
+void UCombatStateDeroyThomas::HandleShooting(FVector ThreatDir)
 {
     // Only shoot when roughly aimed at target
     if (FVector::DotProduct(ContextFSM->SurvivorPawn->GetActorForwardVector(), ThreatDir) > 0.9f)
@@ -108,7 +108,7 @@ void UCombatState::HandleShooting(FVector ThreatDir)
             // No usable weapon -> flee
             GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Out of ammo! Fleeing!"));
 
-            ContextFSM->ChangeState(UFleeState::StaticClass());
+            ContextFSM->ChangeState(UFleeStateDeroyThomas::StaticClass());
         }
     }
 }

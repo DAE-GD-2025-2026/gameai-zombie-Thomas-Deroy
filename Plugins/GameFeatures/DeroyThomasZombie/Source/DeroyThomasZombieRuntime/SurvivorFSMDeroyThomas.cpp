@@ -1,24 +1,24 @@
-﻿#include "SurvivorFSM.h"
-#include "States/ExploreState.h"
+﻿#include "SurvivorFSMDeroyThomas.h"
+#include "States/ExploreStateDeroyThomas.h"
 #include "Survivor/SurvivorPawn.h" 
 #include "AIController.h"
 #include "DrawDebugHelpers.h"
-#include "States/ExploreState.h"
-#include "States/FleeState.h"
-#include "States/CombatState.h"
-#include "States/HideState.h"
+#include "States/ExploreStateDeroyThomas.h"
+#include "States/FleeStateDeroyThomas.h"
+#include "States/CombatStateDeroyThomas.h"
+#include "States/HideStateDeroyThomas.h"
 #include "Common/InventoryComponent.h"
 #include "Common/HealthComponent.h"
 #include "Kismet/GameplayStatics.h"
-#include "States/ReturnState.h"
-#include "States/ScavengeState.h"
+#include "States/ReturnStateDeroyThomas.h"
+#include "States/ScavengeStateDeroyThomas.h"
 
-USurvivorFSM::USurvivorFSM()
+USurvivorFSMDeroyThomas::USurvivorFSMDeroyThomas()
 {
     PrimaryComponentTick.bCanEverTick = true;
 }
 
-void USurvivorFSM::BeginPlay()
+void USurvivorFSMDeroyThomas::BeginPlay()
 {
     Super::BeginPlay();
 
@@ -49,10 +49,10 @@ void USurvivorFSM::BeginPlay()
         }
     }
     
-    ChangeState(UExploreState::StaticClass());
+    ChangeState(UExploreStateDeroyThomas::StaticClass());
 }
 
-void USurvivorFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void USurvivorFSMDeroyThomas::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
     if (!SurvivorPawn) return;
@@ -72,7 +72,7 @@ void USurvivorFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
     if (CurrentState) CurrentState->Update(DeltaTime);
 }
 
-void USurvivorFSM::UpdateHealthMonitor()
+void USurvivorFSMDeroyThomas::UpdateHealthMonitor()
 {
     UHealthComponent* HealthComp = SurvivorPawn->GetComponentByClass<UHealthComponent>();
     if (HealthComp)
@@ -89,7 +89,7 @@ void USurvivorFSM::UpdateHealthMonitor()
     }
 }
 
-bool USurvivorFSM::HandleReflexSpinning(float DeltaTime)
+bool USurvivorFSMDeroyThomas::HandleReflexSpinning(float DeltaTime)
 {
     if (!bIsReflexSpinning || !SurvivorPawn) return false;
 
@@ -110,11 +110,11 @@ bool USurvivorFSM::HandleReflexSpinning(float DeltaTime)
     return true;
 }
 
-void USurvivorFSM::MonitorComfortZone()
+void USurvivorFSMDeroyThomas::MonitorComfortZone()
 {
-    if (CurrentState && (CurrentState->GetClass() == UExploreState::StaticClass() || 
-                         CurrentState->GetClass() == UReturnState::StaticClass() || 
-                         CurrentState->GetClass() == UScavengeState::StaticClass()))
+    if (CurrentState && (CurrentState->GetClass() == UExploreStateDeroyThomas::StaticClass() || 
+                         CurrentState->GetClass() == UReturnStateDeroyThomas::StaticClass() || 
+                         CurrentState->GetClass() == UScavengeStateDeroyThomas::StaticClass()))
     {
         for (AActor* Zombie : KnownZombies)
         {
@@ -133,7 +133,7 @@ void USurvivorFSM::MonitorComfortZone()
     }
 }
 
-void USurvivorFSM::HandleDebugDrawing()
+void USurvivorFSMDeroyThomas::HandleDebugDrawing()
 {
     FVector PawnLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
     
@@ -255,16 +255,16 @@ void USurvivorFSM::HandleDebugDrawing()
     DrawDebugString(GetWorld(), SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 150.0f), DebugText, nullptr, FColor::Cyan, 0.0f, true, 1.2f);
 }
 
-void USurvivorFSM::ChangeState(TSubclassOf<UBaseState> NewStateClass)
+void USurvivorFSMDeroyThomas::ChangeState(TSubclassOf<UBaseStateDeroyThomas> NewStateClass)
 {
     if (CurrentState)
     {
         if (CurrentState->GetClass() == NewStateClass) return; 
         
         UClass* CurrentClass = CurrentState->GetClass();
-        if (CurrentClass != UFleeState::StaticClass() && 
-            CurrentClass != UCombatState::StaticClass() && 
-            CurrentClass != UHideState::StaticClass())
+        if (CurrentClass != UFleeStateDeroyThomas::StaticClass() && 
+            CurrentClass != UCombatStateDeroyThomas::StaticClass() && 
+            CurrentClass != UHideStateDeroyThomas::StaticClass())
         {
             PreviousStateClass = CurrentClass;
         }
@@ -274,7 +274,7 @@ void USurvivorFSM::ChangeState(TSubclassOf<UBaseState> NewStateClass)
 
     if (NewStateClass)
     {
-        CurrentState = NewObject<UBaseState>(this, NewStateClass);
+        CurrentState = NewObject<UBaseStateDeroyThomas>(this, NewStateClass);
         if (CurrentState)
         {
             CurrentState->Enter(this);
@@ -282,7 +282,7 @@ void USurvivorFSM::ChangeState(TSubclassOf<UBaseState> NewStateClass)
     }
 }
 
-void USurvivorFSM::ResumePreviousState()
+void USurvivorFSMDeroyThomas::ResumePreviousState()
 {
     if (PreviousStateClass)
     {
@@ -290,11 +290,11 @@ void USurvivorFSM::ResumePreviousState()
     }
     else
     {
-        ChangeState(UExploreState::StaticClass());
+        ChangeState(UExploreStateDeroyThomas::StaticClass());
     }
 }
 
-void USurvivorFSM::MoveAlongPath(float DeltaTime)
+void USurvivorFSMDeroyThomas::MoveAlongPath(float DeltaTime)
 {
     if (!SurvivorPawn || CurrentPath.IsEmpty()) return;
 
@@ -490,7 +490,7 @@ void USurvivorFSM::MoveAlongPath(float DeltaTime)
     }
 }
 
-bool USurvivorFSM::HasUsableWeapon(int& OutSlotIndex)
+bool USurvivorFSMDeroyThomas::HasUsableWeapon(int& OutSlotIndex)
 {
     if (UInventoryComponent* Inventory = SurvivorPawn->GetComponentByClass<UInventoryComponent>())
     {
@@ -512,16 +512,16 @@ bool USurvivorFSM::HasUsableWeapon(int& OutSlotIndex)
     return false;
 }
 
-void USurvivorFSM::OnPurgeZoneSpotted(AActor* PurgeZone)
+void USurvivorFSMDeroyThomas::OnPurgeZoneSpotted(AActor* PurgeZone)
 {
     ActivePurgeZone = PurgeZone;
     GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Purge zone, run broski!"));
     
     // Overwrite to flee
-    ChangeState(UFleeState::StaticClass()); 
+    ChangeState(UFleeStateDeroyThomas::StaticClass()); 
 }
 
-void USurvivorFSM::OnPurgeZoneLost(AActor* PurgeZone)
+void USurvivorFSMDeroyThomas::OnPurgeZoneLost(AActor* PurgeZone)
 {
     if (ActivePurgeZone == PurgeZone)
     {
@@ -529,7 +529,7 @@ void USurvivorFSM::OnPurgeZoneLost(AActor* PurgeZone)
     }
 }
 
-bool USurvivorFSM::GetBestWeapon(float TargetDistance, int& OutSlotIndex)
+bool USurvivorFSMDeroyThomas::GetBestWeapon(float TargetDistance, int& OutSlotIndex)
 {
     UInventoryComponent* Inventory = SurvivorPawn->GetComponentByClass<UInventoryComponent>();
     if (!Inventory) return false;
@@ -562,7 +562,7 @@ bool USurvivorFSM::GetBestWeapon(float TargetDistance, int& OutSlotIndex)
     return false;
 }
 
-void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
+void USurvivorFSMDeroyThomas::OnZombieSpotted(AActor* Zombie)
 {
     if (ActivePurgeZone) return;
     
@@ -590,7 +590,7 @@ void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
             {
                 GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Saw a gun! Diving for it!"));
                 TargetItem = Cast<ABaseItem>(BestGun);
-                ChangeState(UScavengeState::StaticClass());
+                ChangeState(UScavengeStateDeroyThomas::StaticClass());
                 return;
             }
         }
@@ -613,28 +613,28 @@ void USurvivorFSM::OnZombieSpotted(AActor* Zombie)
     // Safe ammo bc big boy
     if (bIsHeavy)
     {
-        ChangeState(UFleeState::StaticClass());
+        ChangeState(UFleeStateDeroyThomas::StaticClass());
         return;
     }
     
     // Use weapon
     if (GetBestWeapon(DistToZombie, WeaponSlot) && HealthPct > 0.4)
     {
-        ChangeState(UCombatState::StaticClass());
+        ChangeState(UCombatStateDeroyThomas::StaticClass());
     }
     // Hide in house
     else if (bHasValidHouse && DistToZombie > 1000.0f)
     {
-        ChangeState(UHideState::StaticClass());
+        ChangeState(UHideStateDeroyThomas::StaticClass());
     }
     // Run
     else
     {
-        ChangeState(UFleeState::StaticClass()); 
+        ChangeState(UFleeStateDeroyThomas::StaticClass()); 
     }
 }
 
-void USurvivorFSM::EvaluateInventory()
+void USurvivorFSMDeroyThomas::EvaluateInventory()
 {
     if (!SurvivorPawn) return;
     
@@ -689,7 +689,7 @@ void USurvivorFSM::EvaluateInventory()
     }
 }
 
-void USurvivorFSM::OnDamageSensed(FVector DamageLocation)
+void USurvivorFSMDeroyThomas::OnDamageSensed(FVector DamageLocation)
 {
     bIsReflexSpinning = true;
     
@@ -706,7 +706,7 @@ void USurvivorFSM::OnDamageSensed(FVector DamageLocation)
     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Ouch! Whipping around to attacker!"));
 }
 
-AActor* USurvivorFSM::GetClosestKnownItem(EItemType DesiredType)
+AActor* USurvivorFSMDeroyThomas::GetClosestKnownItem(EItemType DesiredType)
 {
     AActor* BestItem = nullptr;
     float ClosestDist = 999999.0f;

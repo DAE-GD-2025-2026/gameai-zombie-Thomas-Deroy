@@ -1,20 +1,20 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
-#include "BaseState.h" 
-#include "ScavengeState.generated.h"
+#include "BaseStateDeroyThomas.h" 
+#include "ScavengeStateDeroyThomas.generated.h"
 
 class UInventoryComponent;
 class UHealthComponent;
 class UStaminaComponent;
 
 UCLASS()
-class DEROYTHOMASZOMBIERUNTIME_API UScavengeState : public UBaseState
+class DEROYTHOMASZOMBIERUNTIME_API UScavengeStateDeroyThomas : public UBaseStateDeroyThomas
 {
 	GENERATED_BODY()
 
 public:
-	virtual void Enter(USurvivorFSM* FSM) override;
+	virtual void Enter(USurvivorFSMDeroyThomas* FSM) override;
 	virtual void Update(float DeltaTime) override;
 	virtual void Exit() override;
 

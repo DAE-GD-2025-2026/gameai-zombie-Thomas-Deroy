@@ -1,12 +1,12 @@
-﻿#include "FleeState.h"
-#include "CombatState.h"
-#include "ExploreState.h"
-#include "HideState.h"
-#include "../SurvivorFSM.h"
+﻿#include "FleeStateDeroyThomas.h"
+#include "CombatStateDeroyThomas.h"
+#include "ExploreStateDeroyThomas.h"
+#include "HideStateDeroyThomas.h"
+#include "../SurvivorFSMDeroyThomas.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Common/StaminaComponent.h"
 
-void UFleeState::Enter(USurvivorFSM* FSM)
+void UFleeStateDeroyThomas::Enter(USurvivorFSMDeroyThomas* FSM)
 {
     Super::Enter(FSM);
     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("State Changed To: Flee"));
@@ -23,7 +23,7 @@ void UFleeState::Enter(USurvivorFSM* FSM)
     }
 }
 
-void UFleeState::Update(float DeltaTime)
+void UFleeStateDeroyThomas::Update(float DeltaTime)
 {
     Super::Update(DeltaTime);
     if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
@@ -74,7 +74,7 @@ void UFleeState::Update(float DeltaTime)
     }
 }
 
-void UFleeState::Exit()
+void UFleeStateDeroyThomas::Exit()
 {
     Super::Exit();
 
@@ -86,7 +86,7 @@ void UFleeState::Exit()
     }
 }
 
-bool UFleeState::HandleShoulderCheck(float DeltaTime, FVector PawnLoc, AActor* ThreatToEvade, FVector LastKnownThreatLoc)
+bool UFleeStateDeroyThomas::HandleShoulderCheck(float DeltaTime, FVector PawnLoc, AActor* ThreatToEvade, FVector LastKnownThreatLoc)
 {
     if (!bIsCheckingBehind) return false;
 
@@ -120,7 +120,7 @@ bool UFleeState::HandleShoulderCheck(float DeltaTime, FVector PawnLoc, AActor* T
             if (ContextFSM->GetBestWeapon(DistToThreat, WSlot))
             {
                 GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Horde! Opening fire!"));
-                ContextFSM->ChangeState(UCombatState::StaticClass());
+                ContextFSM->ChangeState(UCombatStateDeroyThomas::StaticClass());
                 return true;
             }
 
@@ -135,7 +135,7 @@ bool UFleeState::HandleShoulderCheck(float DeltaTime, FVector PawnLoc, AActor* T
             if (bHasHouse)
             {
                 GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("No ammo -> hide!"));
-                ContextFSM->ChangeState(UHideState::StaticClass());
+                ContextFSM->ChangeState(UHideStateDeroyThomas::StaticClass());
                 return true;
             }
 
@@ -147,7 +147,7 @@ bool UFleeState::HandleShoulderCheck(float DeltaTime, FVector PawnLoc, AActor* T
             if (DistToThreat > 600.0f && ContextFSM->GetBestWeapon(DistToThreat, WSlot))
             {
                 GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, TEXT("Fight back!"));
-                ContextFSM->ChangeState(UCombatState::StaticClass());
+                ContextFSM->ChangeState(UCombatStateDeroyThomas::StaticClass());
                 return true;
             }
         }
@@ -170,7 +170,7 @@ bool UFleeState::HandleShoulderCheck(float DeltaTime, FVector PawnLoc, AActor* T
     return true;
 }
 
-void UFleeState::UpdateSafetyAndStamina(float DistToThreat, bool bIsPurge)
+void UFleeStateDeroyThomas::UpdateSafetyAndStamina(float DistToThreat, bool bIsPurge)
 {
     float SafeDistance = bIsPurge ? 2000.0f : 2100.0f;
 
@@ -205,7 +205,7 @@ void UFleeState::UpdateSafetyAndStamina(float DistToThreat, bool bIsPurge)
         if (ContextFSM->GetBestWeapon(DistToThreat, WSlot))
         {
             GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Last resort fight"));
-            ContextFSM->ChangeState(UCombatState::StaticClass());
+            ContextFSM->ChangeState(UCombatStateDeroyThomas::StaticClass());
             return;
         }
     }
@@ -220,7 +220,7 @@ void UFleeState::UpdateSafetyAndStamina(float DistToThreat, bool bIsPurge)
         ContextFSM->SurvivorPawn->StopRunning();
 }
 
-void UFleeState::GenerateEscapeRoute(float DeltaTime, FVector PawnLoc, AActor* ThreatToEvade, bool bIsPurge, float DistToThreat)
+void UFleeStateDeroyThomas::GenerateEscapeRoute(float DeltaTime, FVector PawnLoc, AActor* ThreatToEvade, bool bIsPurge, float DistToThreat)
 {
     FVector DangerCenter = FVector::ZeroVector;
     int Count = 0;
@@ -296,7 +296,7 @@ void UFleeState::GenerateEscapeRoute(float DeltaTime, FVector PawnLoc, AActor* T
         if (!bIsPurge && ContextFSM->GetBestWeapon(DistToThreat, WSlot))
         {
             GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Cornered fight"));
-            ContextFSM->ChangeState(UCombatState::StaticClass());
+            ContextFSM->ChangeState(UCombatStateDeroyThomas::StaticClass());
         }
         else
         {

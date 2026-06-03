@@ -1,46 +1,46 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "StudentPerceptor.h"
+#include "StudentPerceptorDeroyThomas.h"
 #include "AIController.h"
-#include "SurvivorFSM.h"
+#include "SurvivorFSMDeroyThomas.h"
 #include "Zombies/BaseZombie.h"
 #include "Items/BaseItem.h"
 #include "Common/InventoryComponent.h"
-#include "States/ScavengeState.h"
+#include "States/ScavengeStateDeroyThomas.h"
 #include "Village/House/House.h"
 #include "PurgeZones/PurgeZone.h"
 
-UStudentPerceptor::UStudentPerceptor()
+UStudentPerceptorDeroyThomas::UStudentPerceptorDeroyThomas()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 }
 
-void UStudentPerceptor::BeginPlay()
+void UStudentPerceptorDeroyThomas::BeginPlay()
 {
 	Super::BeginPlay();
 	
 	if (auto PerceptionComp = GetOwner()->GetComponentByClass<UAIPerceptionComponent>())
 	{
-		PerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &UStudentPerceptor::OnPerceptionUpdated);
+		PerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &UStudentPerceptorDeroyThomas::OnPerceptionUpdated);
 	}
 }
 
-USurvivorFSM* UStudentPerceptor::GetFSM() const
+USurvivorFSMDeroyThomas* UStudentPerceptorDeroyThomas::GetFSM() const
 {
 	if (APawn* OwnerPawn = Cast<APawn>(GetOwner()))
 	{
 		if (AAIController* Controller = Cast<AAIController>(OwnerPawn->GetController()))
 		{
-			return Controller->GetComponentByClass<USurvivorFSM>();
+			return Controller->GetComponentByClass<USurvivorFSMDeroyThomas>();
 		}
 	}
 	return nullptr;
 }
 
-void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
+void UStudentPerceptorDeroyThomas::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
-	USurvivorFSM* FSM = GetFSM();
+	USurvivorFSMDeroyThomas* FSM = GetFSM();
 	if (!FSM) return;
 	
 	if (Stimulus.Type == UAISense::GetSenseID<UAISense_Damage>()) HandleDamageSensed(FSM, Stimulus);
@@ -50,7 +50,7 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 	else if (Actor->IsA(AHouse::StaticClass())) HandleHouseSensed(FSM, Actor);
 }
 
-void UStudentPerceptor::HandleDamageSensed(USurvivorFSM* FSM, FAIStimulus& Stimulus)
+void UStudentPerceptorDeroyThomas::HandleDamageSensed(USurvivorFSMDeroyThomas* FSM, FAIStimulus& Stimulus)
 {
     if (Stimulus.WasSuccessfullySensed())
     {
@@ -58,7 +58,7 @@ void UStudentPerceptor::HandleDamageSensed(USurvivorFSM* FSM, FAIStimulus& Stimu
     }
 }
 
-void UStudentPerceptor::HandleZombieSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus)
+void UStudentPerceptorDeroyThomas::HandleZombieSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus)
 {
     ABaseZombie* Zombie = Cast<ABaseZombie>(Actor);
     if (!Zombie) return;
@@ -79,7 +79,7 @@ void UStudentPerceptor::HandleZombieSensed(USurvivorFSM* FSM, AActor* Actor, FAI
     }
 }
 
-void UStudentPerceptor::HandlePurgeZoneSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus)
+void UStudentPerceptorDeroyThomas::HandlePurgeZoneSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus)
 {
     APurgeZone* PurgeZone = Cast<APurgeZone>(Actor);
     if (!PurgeZone) return;
@@ -88,7 +88,7 @@ void UStudentPerceptor::HandlePurgeZoneSensed(USurvivorFSM* FSM, AActor* Actor, 
     else FSM->OnPurgeZoneLost(PurgeZone);
 }
 
-void UStudentPerceptor::HandleItemSensed(USurvivorFSM* FSM, AActor* Actor, FAIStimulus& Stimulus)
+void UStudentPerceptorDeroyThomas::HandleItemSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus)
 {
     ABaseItem* Item = Cast<ABaseItem>(Actor);
     if (!Item) return;
@@ -101,12 +101,12 @@ void UStudentPerceptor::HandleItemSensed(USurvivorFSM* FSM, AActor* Actor, FAISt
         if (Inventory && Inventory->GetInventory().Contains(nullptr) && !FSM->CurrentThreat && !FSM->TargetItem)
         {
             FSM->TargetItem = Item;
-            FSM->ChangeState(UScavengeState::StaticClass());
+            FSM->ChangeState(UScavengeStateDeroyThomas::StaticClass());
         }
     }
 }
 
-void UStudentPerceptor::HandleHouseSensed(USurvivorFSM* FSM, AActor* Actor)
+void UStudentPerceptorDeroyThomas::HandleHouseSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor)
 {
     AHouse* House = Cast<AHouse>(Actor);
     if (!House) return;

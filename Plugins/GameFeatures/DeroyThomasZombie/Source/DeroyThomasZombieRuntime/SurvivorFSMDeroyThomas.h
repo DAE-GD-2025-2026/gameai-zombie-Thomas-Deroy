@@ -2,24 +2,24 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "States/BaseState.h"
+#include "States/BaseStateDeroyThomas.h"
 #include "Items/BaseItem.h"
 #include "Village/House/House.h"
-#include "SurvivorFSM.generated.h"
+#include "SurvivorFSMDeroyThomas.generated.h"
 
 class ASurvivorPawn;
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class DEROYTHOMASZOMBIERUNTIME_API USurvivorFSM : public UActorComponent
+class DEROYTHOMASZOMBIERUNTIME_API USurvivorFSMDeroyThomas : public UActorComponent
 {
 	GENERATED_BODY()
 
 public: 
-	USurvivorFSM();
+	USurvivorFSMDeroyThomas();
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	void OnZombieSpotted(AActor* Zombie);
-	void ChangeState(TSubclassOf<UBaseState> NewStateClass);
+	void ChangeState(TSubclassOf<UBaseStateDeroyThomas> NewStateClass);
 	void ResumePreviousState();
 	void MoveAlongPath(float DeltaTime);
 	
@@ -75,7 +75,7 @@ public:
 	float TimeSinceLastTown{0.0f};
 	
 	UPROPERTY()
-	TSubclassOf<UBaseState> PreviousStateClass;
+	TSubclassOf<UBaseStateDeroyThomas> PreviousStateClass;
 	
 	UPROPERTY()
 	FVector LastFrameLocation{FVector::ZeroVector};
@@ -103,7 +103,7 @@ protected:
 
 private:
 	UPROPERTY()
-	UBaseState* CurrentState;
+	UBaseStateDeroyThomas* CurrentState;
 	
 	void HandleDebugDrawing();
 	void UpdateHealthMonitor();
