@@ -34,6 +34,13 @@ void UScavengeStateDeroyThomas::Update(float DeltaTime)
         return;
     }
     
+    if (!IsValid(ContextFSM->TargetItem))
+    {
+        ContextFSM->TargetItem = nullptr;
+        ContextFSM->ResumePreviousState();
+        return;
+    }
+    
     float DistToItem = FVector::Distance(
         ContextFSM->SurvivorPawn->GetActorLocation(),
         ContextFSM->TargetItem->GetActorLocation()
@@ -66,6 +73,34 @@ void UScavengeStateDeroyThomas::Update(float DeltaTime)
         );
 
         ContextFSM->CurrentPathIndex = 0;
+        
+        bool bIsUnreachable = ContextFSM->CurrentPath.IsEmpty();
+        
+        if (!bIsUnreachable)
+        {
+            // Check if reach the item
+            float PathEndDist = FVector::Distance(ContextFSM->CurrentPath.Last(), ContextFSM->TargetItem->GetActorLocation());
+    
+            // Path stops too far away
+            if (PathEndDist > Inventory->GetPickupRange() + 50.0f)
+            {
+                bIsUnreachable = true;
+            }
+        }
+
+        if (bIsUnreachable)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Item is physically unreachable! Abandoning."));
+            
+            // Remove from memory 
+            ContextFSM->KnownItems.Remove(ContextFSM->TargetItem);
+            ContextFSM->TargetItem = nullptr;
+            ContextFSM->CurrentPath.Empty();
+            
+            // Continue
+            ContextFSM->ResumePreviousState();
+            return;
+        }
     }
     else
     {

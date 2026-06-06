@@ -58,7 +58,6 @@ public:
 	AActor* ActivePurgeZone;
 
 	void OnPurgeZoneSpotted(AActor* PurgeZone);
-	void OnPurgeZoneLost(AActor* PurgeZone);
 	
 	UPROPERTY()
 	bool bHasDoneStartSpin{false};
@@ -86,6 +85,10 @@ public:
 	// Debug
 	UPROPERTY()
 	bool bShowDebug{true};
+	UPROPERTY()
+	bool bShowEnemyDebug{true};    
+	UPROPERTY()
+	bool bShowMovementDebug{true};
 	
 	UPROPERTY()
 	TArray<AHouse*> AllLevelHouses;

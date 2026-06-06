@@ -47,7 +47,7 @@ void UStudentPerceptorDeroyThomas::OnPerceptionUpdated(AActor* Actor, FAIStimulu
 	else if (Actor->IsA(ABaseZombie::StaticClass())) HandleZombieSensed(FSM, Actor, Stimulus);
 	else if (Actor->IsA(APurgeZone::StaticClass())) HandlePurgeZoneSensed(FSM, Actor, Stimulus);
 	else if (Actor->IsA(ABaseItem::StaticClass())) HandleItemSensed(FSM, Actor, Stimulus);
-	else if (Actor->IsA(AHouse::StaticClass())) HandleHouseSensed(FSM, Actor);
+	else if (Actor->IsA(AHouse::StaticClass())) HandleHouseSensed(FSM, Actor, Stimulus);
 }
 
 void UStudentPerceptorDeroyThomas::HandleDamageSensed(USurvivorFSMDeroyThomas* FSM, FAIStimulus& Stimulus)
@@ -85,7 +85,6 @@ void UStudentPerceptorDeroyThomas::HandlePurgeZoneSensed(USurvivorFSMDeroyThomas
     if (!PurgeZone) return;
 
     if (Stimulus.WasSuccessfullySensed()) FSM->OnPurgeZoneSpotted(PurgeZone);
-    else FSM->OnPurgeZoneLost(PurgeZone);
 }
 
 void UStudentPerceptorDeroyThomas::HandleItemSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus)
@@ -106,18 +105,17 @@ void UStudentPerceptorDeroyThomas::HandleItemSensed(USurvivorFSMDeroyThomas* FSM
     }
 }
 
-void UStudentPerceptorDeroyThomas::HandleHouseSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor)
+void UStudentPerceptorDeroyThomas::HandleHouseSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus)
 {
-    AHouse* House = Cast<AHouse>(Actor);
-    if (!House) return;
+	AHouse* House = Cast<AHouse>(Actor);
+	if (!House) return;
+	
+	if (Stimulus.WasSuccessfullySensed() && !FSM->KnownHouses.Contains(House) && !FSM->VisitedHouses.Contains(House))
+	{
+		FSM->KnownHouses.Add(House);
+		FSM->TotalHousesDiscovered++;
+		FSM->DiscoveredHouseIDs.Add(House, FSM->TotalHousesDiscovered);
 
-    if (!FSM->KnownHouses.Contains(House) && !FSM->VisitedHouses.Contains(House))
-    {
-        FSM->KnownHouses.Add(House);
-        
-        FSM->TotalHousesDiscovered++;
-        FSM->DiscoveredHouseIDs.Add(House, FSM->TotalHousesDiscovered);
-
-        GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Blue, TEXT("Spotted a House!"));
-    }
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Blue, TEXT("Spotted a House!"));
+	}
 }

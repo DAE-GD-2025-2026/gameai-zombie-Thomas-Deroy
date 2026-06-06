@@ -2,6 +2,7 @@
 #include "CombatStateDeroyThomas.h"
 #include "ExploreStateDeroyThomas.h"
 #include "HideStateDeroyThomas.h"
+#include "ScavengeStateDeroyThomas.h"
 #include "../SurvivorFSMDeroyThomas.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Common/StaminaComponent.h"
@@ -177,7 +178,7 @@ bool UFleeStateDeroyThomas::HandleShoulderCheck(float DeltaTime, FVector PawnLoc
 
 void UFleeStateDeroyThomas::UpdateSafetyAndStamina(float DistToThreat, bool bIsPurge)
 {
-    float SafeDistance = bIsPurge ? 2000.0f : 2100.0f;
+    float SafeDistance = bIsPurge ? 1200.0f : 2100.0f;
 
     // When to start lookback
     if ((FleeTime > 5.0f || DistToThreat > SafeDistance) && !bIsCheckingBehind)
@@ -260,33 +261,59 @@ void UFleeStateDeroyThomas::GenerateEscapeRoute(float DeltaTime, FVector PawnLoc
     int DummySlot;
     if (!bIsPurge && !ContextFSM->HasUsableWeapon(DummySlot))
     {
-        AHouse* BestHouse = nullptr;
-        float BestDist = FLT_MAX;
+        // Go for a known weapon first
+        AActor* BestGun = ContextFSM->GetClosestKnownItem(EItemType::Shotgun);
+        if (!BestGun) BestGun = ContextFSM->GetClosestKnownItem(EItemType::Pistol);
 
-        TArray<AHouse*> AllHouses = ContextFSM->KnownHouses;
-        AllHouses.Append(ContextFSM->VisitedHouses);
-
-        for (AHouse* House : AllHouses)
+        if (BestGun)
         {
-            if (!IsValid(House)) continue;
+            EscapeLocation = BestGun->GetActorLocation();
+            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, TEXT("Unarmed! Sprinting towards a remembered gun!"));
 
-            FVector DirToHouse = (House->GetActorLocation() - PawnLoc).GetSafeNormal();
-
-            if (FVector::DotProduct(RunDir, DirToHouse) > -0.3f)
+            // Grab it
+            if (FVector::Distance(PawnLoc, EscapeLocation) < 800.0f)
             {
-                float Dist = FVector::Distance(PawnLoc, House->GetActorLocation());
-                if (Dist < BestDist)
-                {
-                    BestDist = Dist;
-                    BestHouse = House;
-                }
+                ContextFSM->TargetItem = Cast<ABaseItem>(BestGun);
+                ContextFSM->ChangeState(UScavengeStateDeroyThomas::StaticClass());
+                return;
             }
         }
-
-        if (BestHouse)
+        else
         {
-            EscapeLocation = BestHouse->GetBounds().Origin;
-            GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("Running to house"));
+            // If no weapons, find safe house
+            AHouse* BestHouse = nullptr;
+            float BestDist = FLT_MAX;
+
+            TArray<AHouse*> AllHouses = ContextFSM->KnownHouses;
+            AllHouses.Append(ContextFSM->VisitedHouses);
+
+            for (AHouse* House : AllHouses)
+            {
+                if (!IsValid(House)) continue;
+
+                float DistToHouse = FVector::Distance(PawnLoc, House->GetActorLocation());
+
+                // Skip houses we're already at
+                if (DistToHouse < 600.0f) continue;
+
+                FVector DirToHouse = (House->GetActorLocation() - PawnLoc).GetSafeNormal();
+
+                if (FVector::DotProduct(RunDir, DirToHouse) > -0.3f)
+                {
+                    if (DistToHouse < BestDist)
+                    {
+                        BestDist = DistToHouse;
+                        BestHouse = House;
+                    }
+                }
+            }
+
+            if (BestHouse)
+            {
+                // Head to the best escape option
+                EscapeLocation = BestHouse->GetBounds().Origin;
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("Running to house"));
+            }
         }
     }
 

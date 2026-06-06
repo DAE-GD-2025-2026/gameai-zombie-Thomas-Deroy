@@ -95,13 +95,13 @@ bool UExploreStateDeroyThomas::CheckSuppliesAndReturn(float DeltaTime)
     {
         ContextFSM->TimeSinceLastTown += DeltaTime;
 
-        if (EmptySlots >= 3 && ContextFSM->TimeSinceLastTown > 10.0f)
+        if (EmptySlots >= 3 && ContextFSM->TimeSinceLastTown > 20.0f)
         {
             ContextFSM->ChangeState(UReturnStateDeroyThomas::StaticClass());
             return true;
         }
 
-        if (ContextFSM->TimeSinceLastTown > 30.0f)
+        if (ContextFSM->TimeSinceLastTown > 40.0f)
         {
             ContextFSM->KnownHouses = ContextFSM->VisitedHouses;
             ContextFSM->VisitedHouses.Empty();
@@ -125,8 +125,8 @@ bool UExploreStateDeroyThomas::HandleHouseSearching()
     if (ContextFSM->TargetHouse)
     {
         float DistToHouse = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->TargetHouse->GetActorLocation());
-        
         bool bReachedWaypoint = false;
+        
         if (ContextFSM->CurrentPath.Num() > 0)
         {
             float DistToWaypoint = FVector::Distance(ContextFSM->SurvivorPawn->GetActorLocation(), ContextFSM->CurrentPath.Last());

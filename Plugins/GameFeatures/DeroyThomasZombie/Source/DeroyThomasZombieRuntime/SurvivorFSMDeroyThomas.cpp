@@ -58,7 +58,12 @@ void USurvivorFSMDeroyThomas::TickComponent(float DeltaTime, ELevelTick TickType
     if (!SurvivorPawn) return;
     
     APlayerController* PC = GetWorld()->GetFirstPlayerController();
-    if (PC && PC->WasInputKeyJustPressed(EKeys::One)) bShowDebug = !bShowDebug; 
+    if (PC)
+    {
+        if (PC->WasInputKeyJustPressed(EKeys::One)) bShowDebug = !bShowDebug; 
+        if (PC->WasInputKeyJustPressed(EKeys::Two)) bShowEnemyDebug = !bShowEnemyDebug; 
+        if (PC->WasInputKeyJustPressed(EKeys::Three)) bShowMovementDebug = !bShowMovementDebug; 
+    }
 
     if (bShowDebug) HandleDebugDrawing();
     
@@ -112,6 +117,22 @@ bool USurvivorFSMDeroyThomas::HandleReflexSpinning(float DeltaTime)
 
 void USurvivorFSMDeroyThomas::MonitorComfortZone()
 {
+    if (IsValid(ActivePurgeZone))
+    {
+        float DistToPurge = FVector::Distance(SurvivorPawn->GetActorLocation(), ActivePurgeZone->GetActorLocation());
+        
+        // Panic if in it
+        if (DistToPurge < 800.0f)
+        {
+            if (CurrentState && CurrentState->GetClass() != UFleeStateDeroyThomas::StaticClass())
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Purge Zone Threat! Evacuating!"));
+                ChangeState(UFleeStateDeroyThomas::StaticClass());
+                return;
+            }
+        }
+    }
+    
     if (CurrentState && (CurrentState->GetClass() == UExploreStateDeroyThomas::StaticClass() || 
                          CurrentState->GetClass() == UReturnStateDeroyThomas::StaticClass() || 
                          CurrentState->GetClass() == UScavengeStateDeroyThomas::StaticClass()))
@@ -137,122 +158,122 @@ void USurvivorFSMDeroyThomas::HandleDebugDrawing()
 {
     FVector PawnLoc = SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
     
-    // Draw current path
-    for (int i = CurrentPathIndex; i < CurrentPath.Num() - 1; ++i)
-        DrawDebugLine(GetWorld(), CurrentPath[i], CurrentPath[i+1], FColor::Green, false, -1.0f, 0, 2.0f);
-
-    // Draw vision cone
-    FVector Forward = SurvivorPawn->GetActorForwardVector();
-    DrawDebugCone(GetWorld(), PawnLoc, Forward, 500.0f, FMath::DegreesToRadians(70.0f), FMath::DegreesToRadians(5.0f), 24, FColor::Yellow, false, -1.0f, 0, 1.5f);
-
-    // Draw houses
-    for (AHouse* House : AllLevelHouses)
+    if (bShowMovementDebug)
     {
-        if (!IsValid(House)) continue;
+        // Current path
+        for (int i = CurrentPathIndex; i < CurrentPath.Num() - 1; ++i)
+            DrawDebugLine(GetWorld(), CurrentPath[i], CurrentPath[i+1], FColor::Green, false, -1.0f, 0, 2.0f);
 
-        FColor HouseColor = FColor::White;
-        bool bIsTracked = false;
-        FString HouseTag = TEXT("");
+        // Vision check area
+        FVector Forward = SurvivorPawn->GetActorForwardVector();
+        DrawDebugCone(GetWorld(), PawnLoc, Forward, 500.0f, FMath::DegreesToRadians(70.0f), FMath::DegreesToRadians(5.0f), 24, FColor::Yellow, false, -1.0f, 0, 1.5f);
+        DrawDebugString(GetWorld(), PawnLoc + (Forward * 500.0f), TEXT("[PARANOIA CHECK CONE]"), nullptr, FColor::Yellow, 0.0f, true, 1.0f);
 
-        if (VisitedHouses.Contains(House))
+        // Current movement direction
+        if (!CurrentVelocity.IsNearlyZero())
         {
-            HouseColor = FColor::Black;
-            bIsTracked = true;
-            HouseTag = TEXT("Visited");
-        }
-        else if (KnownHouses.Contains(House))
-        {
-            HouseColor = FColor::Blue;
-            bIsTracked = true;
-            HouseTag = TEXT("Known");
+            FVector VelocityEnd = PawnLoc + (CurrentVelocity.GetSafeNormal() * 150.0f);
+            DrawDebugDirectionalArrow(GetWorld(), PawnLoc, VelocityEnd, 40.0f, FColor::Magenta, false, -1.0f, 0, 5.0f);
+            DrawDebugString(GetWorld(), VelocityEnd + FVector(0,0,20.0f), TEXT("[BLENDED STEERING]"), nullptr, FColor::Magenta, 0.0f, true, 1.0f);
         }
         
-        FHouseBounds Bounds = House->GetBounds();
-        DrawDebugBox(GetWorld(), Bounds.Origin, Bounds.Extent, FQuat::Identity, HouseColor, false, -1.0f, 0, 8.0f);
-        
-        if (bIsTracked)
+        // Known and visited houses
+        for (AHouse* House : AllLevelHouses)
         {
-            int32 HouseID = DiscoveredHouseIDs.Contains(House) ? DiscoveredHouseIDs[House] : 0;
+            if (!IsValid(House)) continue;
 
-            FVector TextLoc = House->GetActorLocation() + FVector(0.0f, 0.0f, 400.0f);
-            DrawDebugString(GetWorld(), TextLoc, FString::Printf(TEXT("%s House %d"), *HouseTag, HouseID), nullptr, HouseColor, 0.0f, true, 1.5f);
+            FColor HouseColor = FColor::White;
+            bool bIsTracked = false;
+            FString HouseTag = TEXT("");
 
-            DrawDebugLine(GetWorld(), PawnLoc, House->GetActorLocation(), HouseColor, false, -1.0f, 0, 1.5f);
-
-            FVector Midpoint = PawnLoc + ((House->GetActorLocation() - PawnLoc) * 0.5f);
-            DrawDebugString(GetWorld(), Midpoint, FString::Printf(TEXT("%.0f"), FVector::Distance(PawnLoc, House->GetActorLocation())), nullptr, HouseColor, 0.0f, true, 1.0f);
+            if (VisitedHouses.Contains(House))
+            {
+                HouseColor = FColor::Black;
+                bIsTracked = true;
+                HouseTag = TEXT("MEMORY MAP: VISITED");
+            }
+            else if (KnownHouses.Contains(House))
+            {
+                HouseColor = FColor::Blue;
+                bIsTracked = true;
+                HouseTag = TEXT("MEMORY MAP: KNOWN");
+            }
+            
+            FHouseBounds Bounds = House->GetBounds();
+            DrawDebugBox(GetWorld(), Bounds.Origin, Bounds.Extent, FQuat::Identity, HouseColor, false, -1.0f, 0, 8.0f);
+            
+            if (bIsTracked)
+            {
+                FVector TextLoc = House->GetActorLocation() + FVector(0.0f, 0.0f, 400.0f);
+                DrawDebugString(GetWorld(), TextLoc, HouseTag, nullptr, HouseColor, 0.0f, true, 1.5f);
+                DrawDebugLine(GetWorld(), PawnLoc, House->GetActorLocation(), HouseColor, false, -1.0f, 0, 1.5f);
+            }
         }
-    }
 
-    // Draw zombies
-    for (AActor* Zombie : KnownZombies) 
-    {
-        if (!IsValid(Zombie)) continue;
+        // Remembered items
+        TArray<AActor*> DynamicFoundItems;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABaseItem::StaticClass(), DynamicFoundItems);
+        UInventoryComponent* Inv = SurvivorPawn->GetComponentByClass<UInventoryComponent>();
 
-        FColor ZombieColor = FColor::Yellow;
-        
-        if (Zombie == CurrentThreat)
+        for (AActor* ActorItem : DynamicFoundItems)
         {
-            ZombieColor = FColor::Red;
-            DrawDebugLine(GetWorld(), PawnLoc, Zombie->GetActorLocation(), FColor::Red, false, -1.0f, 0, 2.0f);
-        }
+            ABaseItem* Item = Cast<ABaseItem>(ActorItem);
 
-        DrawDebugCapsule(GetWorld(), Zombie->GetActorLocation(), 90.0f, 40.0f, FQuat::Identity, ZombieColor, false, -1.0f, 0, 5.0f);
+            if (!Item || Item->GetOwner() != nullptr || (Inv && Inv->GetInventory().Contains(Item)) || Item->GetItemType() == EItemType::Garbage)
+                continue;
+
+            FColor ItemColor = KnownItems.Contains(Item) ? FColor::Cyan : FColor::White;
+            if (KnownItems.Contains(Item))
+            {
+                DrawDebugLine(GetWorld(), PawnLoc, Item->GetActorLocation(), FColor::Cyan, false, -1.0f, 0, 1.0f);
+                DrawDebugString(GetWorld(), Item->GetActorLocation() + FVector(0.0f, 0.0f, 60.0f), TEXT("[RESTOCK MEMORY]"), nullptr, FColor::Cyan, 0.0f, true, 1.0f);
+            }
+            DrawDebugBox(GetWorld(), Item->GetActorLocation(), FVector(15.0f, 15.0f, 15.0f), FQuat::Identity, ItemColor, false, -1.0f, 0, 3.0f);
+        }
     }
     
-    // Draw items
-    TArray<AActor*> DynamicFoundItems;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABaseItem::StaticClass(), DynamicFoundItems);
-
-    UInventoryComponent* Inv = SurvivorPawn->GetComponentByClass<UInventoryComponent>();
-
-    for (AActor* ActorItem : DynamicFoundItems)
+    if (bShowEnemyDebug)
     {
-        ABaseItem* Item = Cast<ABaseItem>(ActorItem);
-
-        // Ignore invalid, owned or garbage items
-        if (!Item || Item->GetOwner() != nullptr || (Inv && Inv->GetInventory().Contains(Item)) || Item->GetItemType() == EItemType::Garbage)
-            continue;
-
-        FColor ItemColor = KnownItems.Contains(Item) ? FColor::Cyan : FColor::White;
-        
-        if (KnownItems.Contains(Item))
+        // Track nearby threats
+        for (AActor* Zombie : KnownZombies) 
         {
-            DrawDebugLine(GetWorld(), PawnLoc, Item->GetActorLocation(), FColor::Cyan, false, -1.0f, 0, 1.0f);
+            if (!IsValid(Zombie)) continue;
 
-            FString ItemName = TEXT("Item");
-            switch (Item->GetItemType())
+            FColor ZombieColor = FColor::Yellow;
+            float DistToZombie = FVector::Distance(PawnLoc, Zombie->GetActorLocation());
+            
+            if (Zombie == CurrentThreat)
             {
-                case EItemType::Pistol:  ItemName = TEXT("Pistol"); break;
-                case EItemType::Shotgun: ItemName = TEXT("Shotgun"); break;
-                case EItemType::Medkit:  ItemName = TEXT("Medkit"); break;
-                case EItemType::Food:    ItemName = TEXT("Food"); break;
+                ZombieColor = FColor::Red;
+
+                // Current target
+                DrawDebugLine(GetWorld(), PawnLoc, Zombie->GetActorLocation() + FVector(0,0,30), FColor::Red, false, -1.0f, 0, 4.0f);
+                DrawDebugBox(GetWorld(), Zombie->GetActorLocation(), FVector(55.0f, 55.0f, 100.0f), FQuat::Identity, FColor::Red, false, -1.0f, 0, 4.0f);
+                DrawDebugString(GetWorld(), Zombie->GetActorLocation() + FVector(0.0f, 0.0f, 120.0f), FString::Printf(TEXT("[TARGET LOCKED]\nDistance: %.0f"), DistToZombie), nullptr, FColor::Red, 0.0f, true, 1.5f);
+            }
+            else
+            {
+                DrawDebugString(GetWorld(), Zombie->GetActorLocation() + FVector(0.0f, 0.0f, 100.0f), FString::Printf(TEXT("Dist: %.0f"), DistToZombie), nullptr, ZombieColor, 0.0f, true, 1.0f);
             }
 
-            DrawDebugString(GetWorld(), Item->GetActorLocation() + FVector(0.0f, 0.0f, 40.0f), ItemName, nullptr, FColor::Cyan, 0.0f, true, 1.0f);
+            DrawDebugCapsule(GetWorld(), Zombie->GetActorLocation(), 90.0f, 40.0f, FQuat::Identity, ZombieColor, false, -1.0f, 0, 5.0f);
         }
 
-        DrawDebugBox(GetWorld(), Item->GetActorLocation(), FVector(15.0f, 15.0f, 15.0f), FQuat::Identity, ItemColor, false, -1.0f, 0, 3.0f);
+        // Current state and priorities
+        FString DebugText;
+        if (CurrentState)
+        {
+            FString StateName = CurrentState->GetClass()->GetName();
+            StateName.RemoveFromStart("U");
+            StateName.RemoveFromEnd("DeroyThomas");
+            DebugText += FString::Printf(TEXT("STATE: %s\nRESTOCK TIMER: %.1f"), *StateName, TimeSinceLastTown);
+        }
+
+        if (CurrentThreat) DebugText += TEXT("\nTargeting: ZOMBIE RUN");
+        if (ActivePurgeZone) DebugText += TEXT("\nTargeting: PURGE ZONE RUN");
+
+        DrawDebugString(GetWorld(), SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 220.0f), DebugText, nullptr, FColor::Cyan, 0.0f, true, 1.2f);
     }
-
-    // Draw FSM info
-    FString DebugText;
-
-    if (CurrentState)
-    {
-        FString StateName = CurrentState->GetClass()->GetName();
-        StateName.RemoveFromStart("U");
-
-        DebugText += FString::Printf(TEXT("\nSTATE: %s\nWANDER TIMER: %.1f"), *StateName, TimeSinceLastTown);
-    }
-
-    if (CurrentThreat)
-        DebugText += TEXT("\nTargeting: ZOMBIE RUN");
-
-    if (ActivePurgeZone)
-        DebugText += TEXT("\nTargeting: PURGE ZONE RUN");
-
-    DrawDebugString(GetWorld(), SurvivorPawn->GetActorLocation() + FVector(0.0f, 0.0f, 150.0f), DebugText, nullptr, FColor::Cyan, 0.0f, true, 1.2f);
 }
 
 void USurvivorFSMDeroyThomas::ChangeState(TSubclassOf<UBaseStateDeroyThomas> NewStateClass)
@@ -446,7 +467,6 @@ void USurvivorFSMDeroyThomas::MoveAlongPath(float DeltaTime)
         float DynamicRotSpeed = FMath::GetMappedRangeValueClamped(FVector2D(1.0f, -1.0f), FVector2D(15.0f, 45.0f), DirectionDot);
        
         FRotator TargetRot = CurrentVelocity.Rotation();
-
         FRotator SmoothRot = FMath::RInterpTo(SurvivorPawn->GetActorRotation(), TargetRot, DeltaTime, DynamicRotSpeed);
 
         SurvivorPawn->SetActorRotation(SmoothRot);
@@ -459,34 +479,6 @@ void USurvivorFSMDeroyThomas::MoveAlongPath(float DeltaTime)
     if (FVector::Distance(PawnLocation, TargetPoint) < ArrivalTolerance)
     {
         CurrentPathIndex++; 
-    }
-    // Apply movement input
-    SurvivorPawn->AddMovementInput(DesiredDirection, 1.0f);
-
-    // Smoothly rotate towards movement direction
-    if (!DesiredDirection.IsNearlyZero(0.1f))
-    {
-       float DirectionDot = FVector::DotProduct(SurvivorPawn->GetActorForwardVector(), DesiredDirection);
-       
-       // Rotate faster during sharp turns
-        float DynamicRotSpeed = FMath::GetMappedRangeValueClamped(FVector2D(1.0f, -1.0f), FVector2D(15.0f, 45.0f), DirectionDot);
-       
-       FRotator TargetRot = DesiredDirection.Rotation();
-
-       FRotator SmoothRot = FMath::RInterpTo(
-           SurvivorPawn->GetActorRotation(),
-           TargetRot,
-           DeltaTime,
-           DynamicRotSpeed
-       );
-
-       SurvivorPawn->SetActorRotation(SmoothRot);
-    }
-    
-    // Advance to next waypoint
-    if (FVector::Distance(PawnLocation, TargetPoint) < ArrivalTolerance)
-    {
-       CurrentPathIndex++; 
     }
 }
 
@@ -515,18 +507,6 @@ bool USurvivorFSMDeroyThomas::HasUsableWeapon(int& OutSlotIndex)
 void USurvivorFSMDeroyThomas::OnPurgeZoneSpotted(AActor* PurgeZone)
 {
     ActivePurgeZone = PurgeZone;
-    GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Purge zone, run broski!"));
-    
-    // Overwrite to flee
-    ChangeState(UFleeStateDeroyThomas::StaticClass()); 
-}
-
-void USurvivorFSMDeroyThomas::OnPurgeZoneLost(AActor* PurgeZone)
-{
-    if (ActivePurgeZone == PurgeZone)
-    {
-        ActivePurgeZone = nullptr;
-    }
 }
 
 bool USurvivorFSMDeroyThomas::GetBestWeapon(float TargetDistance, int& OutSlotIndex)
@@ -564,7 +544,11 @@ bool USurvivorFSMDeroyThomas::GetBestWeapon(float TargetDistance, int& OutSlotIn
 
 void USurvivorFSMDeroyThomas::OnZombieSpotted(AActor* Zombie)
 {
-    if (ActivePurgeZone) return;
+    if (IsValid(ActivePurgeZone))
+    {
+        float DistToPurge = FVector::Distance(SurvivorPawn->GetActorLocation(), ActivePurgeZone->GetActorLocation());
+        if (DistToPurge < 800.0f) return; 
+    }
     
     // Zombie is far
     float DistToZombie = FVector::Distance(SurvivorPawn->GetActorLocation(), Zombie->GetActorLocation());

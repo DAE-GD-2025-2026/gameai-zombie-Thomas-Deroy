@@ -26,9 +26,11 @@ void UHideStateDeroyThomas::Update(float DeltaTime)
     Super::Update(DeltaTime);
 
     if (!ContextFSM || !ContextFSM->SurvivorPawn) return;
-
+    
     // Check if threat is still close
     EvaluateThreatDistance();
+    
+    if (!ContextFSM) return;
 
     // Move toward hiding spot
     if (ContextFSM->CurrentPathIndex < ContextFSM->CurrentPath.Num())

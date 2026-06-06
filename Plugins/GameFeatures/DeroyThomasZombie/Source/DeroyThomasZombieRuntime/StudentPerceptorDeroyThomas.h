@@ -33,5 +33,5 @@ private:
 	void HandleZombieSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus);
 	void HandlePurgeZoneSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus);
 	void HandleItemSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus);
-	void HandleHouseSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor);
+	void HandleHouseSensed(USurvivorFSMDeroyThomas* FSM, AActor* Actor, FAIStimulus& Stimulus);
 };
